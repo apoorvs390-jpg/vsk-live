@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vishwa Samwad Kendra — Universal Research Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
+<style>
+:root{
+  --bg:#F5F7FA;
+  --bg-grad-a:#EEF3FB; --bg-grad-b:#F7F5F1;
+  --surface:rgba(255,255,255,.72);
+  --surface-solid:#FFFFFF;
+  --ink:#0F1722;
+  --ink-soft:#3C4656;
+  --muted:#6B7585;
+  --hairline:#E2E7EF;
+  --accent:#1F4FD8;
+  --accent-ink:#FFFFFF;
+  --accent-soft:#E9EFFC;
+  --amber:#B26A00;
+  --amber-soft:#FBF1DF;
+  --shadow:0 8px 32px rgba(20,35,70,.09);
+  --shadow-lg:0 24px 64px rgba(20,35,70,.14);
+  --radius:18px;
+  --glass-blur:blur(18px) saturate(1.4);
+}
+[data-theme="dark"]{
+  --bg:#0B0E13;
+  --bg-grad-a:#0D1220; --bg-grad-b:#101018;
+  --surface:rgba(24,29,40,.66);
+  --surface-solid:#161B26;
+  --ink:#EAEEF6;
+  --ink-soft:#C3CBD8;
+  --muted:#8B94A6;
+  --hairline:#242C3B;
+  --accent:#7B96FF;
+  --accent-ink:#0B0E13;
+  --accent-soft:#1B2440;
+  --amber:#E5B267;
+  --amber-soft:#2B2415;
+  --shadow:0 8px 32px rgba(0,0,0,.4);
+  --shadow-lg:0 24px 64px rgba(0,0,0,.5);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  font-family:'Inter',system-ui,sans-serif;
+  background:
+    radial-gradient(1100px 600px at 15% -10%, var(--bg-grad-a), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, var(--bg-grad-b), transparent 55%),
+    var(--bg);
+  color:var(--ink);
+  min-height:100vh;
+  transition:background .4s ease,color .3s ease;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;cursor:pointer}
+textarea,input{font-family:inherit}
+::selection{background:var(--accent-soft)}
+
+/* ---------- header ---------- */
+header{
+  position:sticky;top:0;z-index:50;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 22px;
+  backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
+  background:linear-gradient(to bottom, var(--surface), transparent);
+}
+.wordmark{display:flex;align-items:center;gap:10px;background:none;border:none;color:var(--ink)}
+.wordmark svg{display:block}
+.wordmark .name{font-family:'Newsreader',serif;font-size:17px;font-weight:600;letter-spacing:.01em}
+.wordmark .tag{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:2px}
+.hdr-actions{display:flex;gap:8px;align-items:center}
+.icon-btn{
+  display:inline-flex;align-items:center;gap:7px;
+  border:1px solid var(--hairline);background:var(--surface);
+  backdrop-filter:var(--glass-blur);
+  color:var(--ink-soft);border-radius:999px;
+  padding:8px 14px;font-size:13px;font-weight:500;
+  transition:all .18s ease;
+}
+.icon-btn:hover{border-color:var(--accent);color:var(--accent)}
+.icon-btn:focus-visible, .search-btn:focus-visible, .mode-pill:focus-visible, .chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- home ---------- */
+#homeView{max-width:860px;margin:0 auto;padding:9vh 22px 60px;text-align:center}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);display:inline-flex;align-items:center;gap:10px}
+.eyebrow::before,.eyebrow::after{content:"";width:28px;height:1px;background:var(--hairline)}
+h1.hero{
+  font-family:'Newsreader',serif;font-weight:500;
+  font-size:clamp(34px,5.4vw,58px);line-height:1.08;
+  letter-spacing:-.015em;margin:20px 0 14px;
+}
+h1.hero em{font-style:italic;color:var(--accent)}
+.hero-sub{color:var(--muted);font-size:15.5px;max-width:560px;margin:0 auto 42px;line-height:1.6}
+
+/* the search console — signature element */
+.console{
+  position:relative;text-align:left;
+  background:var(--surface);
+  backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
+  border:1px solid var(--hairline);
+  border-radius:26px;
+  box-shadow:var(--shadow-lg);
+  overflow:hidden;
+  transition:border-color .2s ease;
+}
+.console:focus-within{border-color:var(--accent)}
+.console .meridian{
+  position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  background-size:40% 100%;background-repeat:no-repeat;background-position:-40% 0;
+  opacity:0;
+}
+.console.busy .meridian{opacity:1;animation:scan 1.4s linear infinite}
+@keyframes scan{from{background-position:-40% 0}to{background-position:140% 0}}
+.console textarea{
+  width:100%;border:none;background:transparent;resize:none;
+  padding:22px 24px 8px;font-size:16.5px;line-height:1.55;color:var(--ink);
+  min-height:76px;max-height:220px;outline:none;
+}
+.console textarea::placeholder{color:var(--muted);opacity:.85}
+.console-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px 12px 16px;flex-wrap:wrap}
+.modes{display:flex;gap:4px;background:var(--accent-soft);border-radius:999px;padding:4px}
+.mode-pill{
+  border:none;background:transparent;border-radius:999px;
+  padding:7px 14px;font-size:12.5px;font-weight:600;color:var(--muted);
+  transition:all .18s ease;
+}
+.mode-pill.on{background:var(--surface-solid);color:var(--accent);box-shadow:0 2px 8px rgba(20,35,70,.12)}
+.search-btn{
+  display:inline-flex;align-items:center;gap:9px;
+  background:var(--accent);color:var(--accent-ink);
+  border:none;border-radius:999px;padding:11px 22px;
+  font-size:14px;font-weight:600;letter-spacing:.01em;
+  transition:transform .15s ease, box-shadow .2s ease;
+  box-shadow:0 6px 18px rgba(31,79,216,.28);
+}
+.search-btn:hover{transform:translateY(-1px)}
+.search-btn:disabled{opacity:.55;cursor:default;transform:none}
+
+.chips{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin-top:26px}
+.chip{
+  border:1px solid var(--hairline);background:var(--surface);
+  backdrop-filter:var(--glass-blur);
+  color:var(--ink-soft);border-radius:999px;padding:8px 15px;
+  font-size:13px;transition:all .18s ease;
+}
+.chip:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px)}
+.domains{
+  margin-top:54px;display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:center;
+  font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);
+}
+.domains span{opacity:.75}
+
+/* ---------- results ---------- */
+#resultsView{display:none;max-width:1120px;margin:0 auto;padding:12px 22px 120px}
+.exchange{margin-bottom:44px;animation:rise .4s ease}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.query-line{
+  display:flex;align-items:baseline;gap:12px;margin:18px 0 16px;flex-wrap:wrap;
+}
+.query-line .q{font-family:'Newsreader',serif;font-size:clamp(22px,3vw,30px);font-weight:500;letter-spacing:-.01em}
+.query-line .badge{
+  font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:4px 8px;white-space:nowrap;
+}
+
+/* research trace */
+.trace{
+  border:1px solid var(--hairline);border-radius:var(--radius);
+  background:var(--surface);backdrop-filter:var(--glass-blur);
+  padding:16px 20px;margin-bottom:20px;box-shadow:var(--shadow);
+}
+.trace-step{display:flex;align-items:center;gap:12px;padding:6px 0;font-size:13.5px;color:var(--muted);transition:color .3s ease}
+.trace-step .dot{width:8px;height:8px;border-radius:50%;background:var(--hairline);flex-shrink:0;transition:all .3s ease}
+.trace-step.active{color:var(--ink)}
+.trace-step.active .dot{background:var(--accent);animation:pulse 1s ease infinite}
+.trace-step.done{color:var(--ink-soft)}
+.trace-step.done .dot{background:var(--accent)}
+@keyframes pulse{50%{transform:scale(1.6);opacity:.6}}
+
+.result-grid{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:26px;align-items:start}
+@media(max-width:900px){.result-grid{grid-template-columns:1fr}}
+
+/* report */
+.report{
+  background:var(--surface);backdrop-filter:var(--glass-blur);
+  border:1px solid var(--hairline);border-radius:22px;
+  padding:clamp(24px,4vw,44px);box-shadow:var(--shadow);
+}
+.report-body{font-family:'Newsreader',serif;font-size:17.5px;line-height:1.72;color:var(--ink)}
+.report-body h1,.report-body h2{
+  font-family:'Newsreader',serif;font-weight:600;letter-spacing:-.01em;
+  margin:1.6em 0 .55em;line-height:1.2;
+}
+.report-body h1{font-size:1.7em}
+.report-body h2{font-size:1.32em;padding-bottom:.3em;border-bottom:1px solid var(--hairline)}
+.report-body h2:first-child,.report-body h1:first-child{margin-top:0}
+.report-body h3{font-family:'Inter',sans-serif;font-size:.82em;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin:1.5em 0 .5em}
+.report-body p{margin:.7em 0}
+.report-body ul,.report-body ol{margin:.7em 0 .7em 1.4em}
+.report-body li{margin:.35em 0}
+.report-body strong{font-weight:600}
+.report-body a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)}
+.report-body blockquote{border-left:3px solid var(--accent);padding:.2em 0 .2em 1em;margin:1em 0;color:var(--ink-soft);font-style:italic}
+.report-body table{width:100%;border-collapse:collapse;margin:1.1em 0;font-family:'Inter',sans-serif;font-size:.78em}
+.report-body th{text-align:left;font-weight:600;border-bottom:2px solid var(--hairline);padding:9px 12px;background:var(--accent-soft)}
+.report-body td{border-bottom:1px solid var(--hairline);padding:9px 12px;vertical-align:top}
+.report-body code{font-family:'IBM Plex Mono',monospace;font-size:.82em;background:var(--accent-soft);border-radius:5px;padding:2px 6px}
+.report-body pre{background:var(--surface-solid);border:1px solid var(--hairline);border-radius:12px;padding:14px 16px;overflow:auto;margin:1em 0}
+.report-body pre code{background:none;padding:0}
+.report-body hr{border:none;border-top:1px solid var(--hairline);margin:1.6em 0}
+
+.note{
+  margin-top:18px;padding:12px 16px;border-radius:12px;
+  background:var(--amber-soft);color:var(--amber);
+  font-family:'Inter',sans-serif;font-size:12.5px;line-height:1.5;
+}
+.err{
+  background:#FDECEC;color:#A02B2B;border-radius:12px;padding:14px 18px;font-size:14px;line-height:1.55;
+}
+[data-theme="dark"] .err{background:#2E1717;color:#F0A3A3}
+
+/* actions */
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.act{
+  display:inline-flex;align-items:center;gap:7px;
+  border:1px solid var(--hairline);background:var(--surface-solid);
+  color:var(--ink-soft);border-radius:10px;padding:8px 13px;
+  font-size:12.5px;font-weight:500;transition:all .18s ease;
+}
+.act:hover{border-color:var(--accent);color:var(--accent)}
+
+/* sources rail */
+.rail{position:sticky;top:82px}
+.rail h4{
+  font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--muted);margin:0 0 12px 4px;
+}
+.src{
+  display:block;text-decoration:none;
+  background:var(--surface);backdrop-filter:var(--glass-blur);
+  border:1px solid var(--hairline);border-radius:14px;
+  padding:12px 14px;margin-bottom:9px;transition:all .18s ease;
+}
+.src:hover{border-color:var(--accent);transform:translateY(-1px)}
+.src .n{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--accent);margin-bottom:3px}
+.src .t{font-size:13px;font-weight:600;color:var(--ink);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.src .d{font-size:11.5px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rail .none{font-size:13px;color:var(--muted);padding:4px}
+
+/* follow-up composer */
+.composer{
+  position:fixed;left:50%;bottom:22px;transform:translateX(-50%);
+  width:min(720px,calc(100vw - 40px));z-index:60;display:none;
+}
+.composer .console{border-radius:20px}
+.composer textarea{min-height:26px;padding:15px 18px 6px;font-size:15px}
+.composer .console-row{padding:6px 10px 10px 14px}
+
+/* history drawer */
+.scrim{position:fixed;inset:0;background:rgba(10,14,22,.35);backdrop-filter:blur(3px);z-index:80;display:none}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;width:min(360px,92vw);z-index:90;
+  background:var(--surface-solid);border-left:1px solid var(--hairline);
+  box-shadow:var(--shadow-lg);transform:translateX(105%);transition:transform .28s ease;
+  display:flex;flex-direction:column;
+}
+.drawer.open{transform:none}
+.drawer-h{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--hairline)}
+.drawer-h b{font-family:'Newsreader',serif;font-size:18px;font-weight:600}
+.drawer-list{overflow-y:auto;padding:12px;flex:1}
+.hist{
+  width:100%;text-align:left;border:1px solid var(--hairline);background:transparent;
+  border-radius:12px;padding:12px 14px;margin-bottom:8px;color:var(--ink);
+  display:flex;gap:10px;align-items:flex-start;transition:border-color .18s;
+}
+.hist:hover{border-color:var(--accent)}
+.hist .ht{font-size:13.5px;font-weight:600;line-height:1.35;flex:1}
+.hist .hm{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.1em}
+.star{border:none;background:none;font-size:15px;color:var(--muted);padding:0 2px}
+.star.on{color:var(--amber)}
+.drawer .empty{color:var(--muted);font-size:13.5px;text-align:center;padding:40px 20px;line-height:1.6}
+
+.toast{
+  position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(8px);
+  background:var(--ink);color:var(--bg);border-radius:10px;padding:10px 18px;
+  font-size:13px;font-weight:500;opacity:0;pointer-events:none;transition:all .25s ease;z-index:100;
+}
+.toast.show{opacity:1;transform:translateX(-50%)}
+
+/* source picker */
+.picker{
+  border:1px solid var(--hairline);border-radius:var(--radius);
+  background:var(--surface);backdrop-filter:var(--glass-blur);
+  padding:20px 22px;margin-bottom:20px;box-shadow:var(--shadow);
+  animation:rise .35s ease;
+}
+.picker h3{font-family:'Newsreader',serif;font-size:19px;font-weight:600;margin-bottom:3px}
+.picker .ps{font-size:13px;color:var(--muted);margin-bottom:15px}
+.src-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:10px;margin-bottom:16px}
+.src-card{
+  text-align:left;border:1.5px solid var(--hairline);background:var(--surface-solid);
+  border-radius:14px;padding:12px 14px;transition:all .15s ease;color:var(--ink);
+}
+.src-card:hover{border-color:var(--accent)}
+.src-card.sel{border-color:var(--accent);background:var(--accent-soft)}
+.src-card .sn{font-weight:600;font-size:13.5px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.src-card .sn .tick{color:var(--accent);opacity:0;transition:opacity .15s;flex-shrink:0}
+.src-card.sel .sn .tick{opacity:1}
+.src-card .sdm{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--accent);margin:3px 0 5px;word-break:break-all}
+.src-card .sw{font-size:12px;color:var(--muted);line-height:1.45}
+.picker-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.ghost-btn{
+  border:1px solid var(--hairline);background:var(--surface-solid);color:var(--ink-soft);
+  border-radius:999px;padding:10px 18px;font-size:13.5px;font-weight:600;transition:all .15s;
+}
+.ghost-btn:hover{border-color:var(--accent);color:var(--accent)}
+.picker .loading{display:flex;gap:10px;align-items:center;color:var(--muted);font-size:13.5px;padding:6px 0 2px}
+.spinner{width:16px;height:16px;border:2px solid var(--hairline);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.src-toggle-btn{font-size:12px !important;padding:8px 13px !important}
+.src-toggle-btn.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+
+/* book library */
+.lib-scrim{position:fixed;inset:0;background:rgba(10,14,22,.45);backdrop-filter:blur(4px);z-index:120;display:none;align-items:center;justify-content:center;padding:20px}
+.lib-scrim.open{display:flex}
+.lib{
+  background:var(--surface-solid);border:1px solid var(--hairline);border-radius:20px;
+  box-shadow:var(--shadow-lg);width:min(640px,100%);max-height:86vh;display:flex;flex-direction:column;overflow:hidden;
+}
+.lib-h{display:flex;align-items:center;justify-content:space-between;padding:20px 22px;border-bottom:1px solid var(--hairline)}
+.lib-h b{font-family:'Newsreader',serif;font-size:20px;font-weight:600}
+.lib-body{padding:20px 22px;overflow-y:auto}
+.lib-drop{
+  border:2px dashed var(--hairline);border-radius:16px;padding:26px 20px;text-align:center;
+  transition:all .18s ease;cursor:pointer;background:var(--surface);
+}
+.lib-drop:hover,.lib-drop.drag{border-color:var(--accent);background:var(--accent-soft)}
+.lib-drop .big{font-size:26px}
+.lib-drop .t1{font-weight:600;font-size:14.5px;margin-top:8px}
+.lib-drop .t2{font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.5}
+.lib-list{margin-top:18px;display:flex;flex-direction:column;gap:9px}
+.book{
+  display:flex;align-items:center;gap:12px;border:1px solid var(--hairline);
+  border-radius:12px;padding:11px 14px;background:var(--surface);
+}
+.book .bi{font-size:20px;flex-shrink:0}
+.book .bmeta{flex:1;min-width:0}
+.book .bt{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.book .bs{font-size:11.5px;color:var(--muted);margin-top:2px}
+.book .bx{border:none;background:none;color:var(--muted);font-size:18px;cursor:pointer;padding:2px 6px;border-radius:6px;flex-shrink:0}
+.book .bx:hover{color:#c0392b;background:var(--accent-soft)}
+.lib-empty{text-align:center;color:var(--muted);font-size:13px;padding:22px 10px;line-height:1.6}
+.lib-note{margin-top:16px;font-size:11.5px;color:var(--muted);line-height:1.5;background:var(--accent-soft);border-radius:10px;padding:10px 13px}
+.book-badge{background:var(--amber-soft) !important;color:var(--amber) !important}
+.lib-prog{font-size:12px;color:var(--accent);margin-top:10px;display:none}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+@media print{
+  header,.rail,.actions,.composer,.trace,.chips,.toast{display:none!important}
+  body{background:#fff}
+  .report{border:none;box-shadow:none;padding:0}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <button class="wordmark" onclick="goHome()" aria-label="Vishwa Samwad Kendra home">
+    <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true">
+      <circle cx="15" cy="15" r="13" stroke="var(--accent)" stroke-width="1.6"/>
+      <path d="M15 2 C 8 9, 8 21, 15 28" stroke="var(--accent)" stroke-width="1.3" fill="none" opacity=".55"/>
+      <path d="M15 2 C 22 9, 22 21, 15 28" stroke="var(--accent)" stroke-width="1.3" fill="none" opacity=".55"/>
+      <line x1="15" y1="2" x2="15" y2="28" stroke="var(--accent)" stroke-width="1.6"/>
+    </svg>
+    <span>
+      <span class="name">Vishwa Samwad Kendra</span><br>
+      <span class="tag">Universal research engine</span>
+    </span>
+  </button>
+  <div class="hdr-actions">
+    <div class="modes" id="langSwitch" style="padding:3px" role="group" aria-label="Language">
+      <button class="mode-pill on" data-lang="en" onclick="setLang('en')">EN</button>
+      <button class="mode-pill" data-lang="hi" onclick="setLang('hi')">हिंदी</button>
+    </div>
+    <button class="icon-btn" id="newBtn" onclick="goHome()" style="display:none">＋ <span id="newBtnLbl">New research</span></button>
+    <button class="icon-btn" onclick="openLibrary()">📚 <span id="libBtnLbl">Books</span></button>
+    <button class="icon-btn" onclick="toggleDrawer(true)">☰ <span id="histBtnLbl">History</span></button>
+    <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" aria-label="Toggle dark mode">◐</button>
+  </div>
+</header>
+
+<!-- ============ HOME ============ -->
+<main id="homeView">
+  <span class="eyebrow" id="eyebrow">Research anything</span>
+  <h1 class="hero" id="heroTitle">Every question deserves<br>a <em>proper answer</em>.</h1>
+  <p class="hero-sub" id="heroSub">Ask in plain language. Vishwa Samwad Kendra searches trusted sources, cross-checks what it finds, separates fact from opinion, and writes you a structured research report — with references.</p>
+
+  <div class="console" id="homeConsole">
+    <div class="meridian"></div>
+    <textarea id="homeInput" rows="2" placeholder="Search anything…&#10;Research any topic, person, company, country, historical event, science, technology, politics, economics, health, business, law, sports, entertainment and more."></textarea>
+    <div class="console-row">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="modes" role="group" aria-label="Research depth">
+          <button class="mode-pill" data-mode="brief" onclick="setMode('brief')">Brief</button>
+          <button class="mode-pill on" data-mode="standard" onclick="setMode('standard')">Standard</button>
+          <button class="mode-pill" data-mode="deep" onclick="setMode('deep')">Deep research</button>
+        </div>
+        <button class="icon-btn src-toggle-btn on" id="srcToggle" onclick="toggleSrcPick()" title="Choose which sources to research from before searching">🎯 <span id="srcToggleLbl">Pick sources first</span></button>
+      </div>
+      <button class="search-btn" id="homeGo" onclick="startFromHome()">
+        <span id="homeGoLbl">Research</span>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 8h11M9 3.5 13.5 8 9 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="chips" id="chips"></div>
+
+  <div class="domains">
+    <span>History</span><span>Science</span><span>Economics</span><span>Technology</span><span>Medicine</span><span>Politics</span><span>Business</span><span>Law</span><span>Space</span><span>Climate</span><span>Culture</span><span>Sports</span>
+  </div>
+</main>
+
+<!-- ============ RESULTS ============ -->
+<main id="resultsView"></main>
+
+<!-- follow-up composer -->
+<div class="composer" id="composer">
+  <div class="console" id="fuConsole">
+    <div class="meridian"></div>
+    <textarea id="fuInput" rows="1" placeholder="Ask a follow-up, compare, or go deeper…"></textarea>
+    <div class="console-row">
+      <div class="modes">
+        <button class="mode-pill" data-mode="brief" onclick="setMode('brief')">Brief</button>
+        <button class="mode-pill on" data-mode="standard" onclick="setMode('standard')">Standard</button>
+        <button class="mode-pill" data-mode="deep" onclick="setMode('deep')">Deep</button>
+      </div>
+      <button class="search-btn" id="fuGo" onclick="startFollowUp()">Ask</button>
+    </div>
+  </div>
+</div>
+
+<!-- history drawer -->
+<div class="scrim" id="scrim" onclick="toggleDrawer(false)"></div>
+<aside class="drawer" id="drawer" aria-label="Research history">
+  <div class="drawer-h">
+    <b>Research history</b>
+    <button class="icon-btn" onclick="toggleDrawer(false)">Close</button>
+  </div>
+  <div class="drawer-list" id="histList"></div>
+</aside>
+
+<!-- book library modal -->
+<div class="lib-scrim" id="libScrim" onclick="if(event.target===this)closeLibrary()">
+  <div class="lib" role="dialog" aria-label="Book library">
+    <div class="lib-h">
+      <b id="libTitle">📚 My Book Library</b>
+      <button class="icon-btn" onclick="closeLibrary()">Close</button>
+    </div>
+    <div class="lib-body">
+      <div class="lib-drop" id="libDrop" onclick="document.getElementById('libFile').click()">
+        <div class="big">⬆️</div>
+        <div class="t1" id="libDropT1">Add a PDF book</div>
+        <div class="t2" id="libDropT2">Click to choose a PDF, or drag one here. The book is saved in this browser and searched alongside the web.</div>
+      </div>
+      <input type="file" id="libFile" accept="application/pdf" multiple style="display:none">
+      <div class="lib-prog" id="libProg"></div>
+      <div class="lib-list" id="libList"></div>
+      <div class="lib-note" id="libNote">📌 Books are stored privately in this browser on this device only. They aren't uploaded to any server and won't appear on other devices or for people you share the link with. Only PDFs with real (selectable) text work — scanned image-only PDFs can't be read.</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================= state ============================= */
+/* API endpoint — inside claude.ai this calls the AI directly.
+   For self-hosting outside Claude, change this to your own proxy, e.g. "/api/research" */
+const API_URL = "/api/research"; // proxied through your own server — keeps your API key secret
+
+const state = {
+  mode: 'standard',
+  lang: 'en',          // 'en' | 'hi'
+  pickSources: true,   // show source picker before researching
+  busy: false,
+  sessions: [],        // {id, title, mode, exchanges:[{q, md, sources}], domains, starred, ts}
+  current: null,       // active session object
+  convo: [],           // API message history for active session
+};
+
+/* ============================= i18n ============================= */
+const I18N = {
+  en: {
+    eyebrow: 'Research anything',
+    hero: 'Every question deserves<br>a <em>proper answer</em>.',
+    sub: 'Ask in plain language. Vishwa Samwad Kendra searches trusted sources, cross-checks what it finds, separates fact from opinion, and writes you a structured research report — with references.',
+    ph: "Search anything…\nResearch any topic, person, company, country, historical event, science, technology, politics, economics, health, business, law, sports, entertainment and more.",
+    fuPh: 'Ask a follow-up, compare, or go deeper…',
+    research: 'Research', ask: 'Ask', busyBtn: 'Researching…',
+    brief: 'Brief', standard: 'Standard', deep: 'Deep research', deepShort: 'Deep',
+    srcOn: 'Pick sources first', srcOff: 'Sources: auto',
+    newBtn: 'New research', histBtn: 'History',
+    modeBadge: { brief: 'Brief mode', standard: 'Standard mode', deep: 'Deep research mode' },
+    srcBadge: n => `${n} source${n>1?'s':''} selected`,
+    sources: 'Sources',
+    noSources: 'Answered from general knowledge — no live sources were needed for this query.',
+    pickTitle: 'Where should I research this?',
+    pickSub: 'Pick one or more sources to research from — or let the engine use all trusted sources automatically.',
+    finding: 'Finding the most authoritative sources for your topic…',
+    autoBtn: '⚡ Auto — all trusted sources',
+    startBtn: n => `Research ${n} selected →`,
+    writing: s => `✍️ Writing part ${s} of the report… (long reports are written in parts automatically)`,
+    limitNote: 'This report used its full auto-writing budget. Ask a follow-up like "continue" and it will keep going.',
+    trace: ["Understanding the question","Searching trusted sources","Cross-checking information","Removing duplicates & detecting conflicts","Separating facts from opinions","Composing the research report"],
+  },
+  hi: {
+    eyebrow: 'किसी भी विषय पर शोध करें',
+    hero: 'हर प्रश्न को चाहिए<br>एक <em>सटीक उत्तर</em>।',
+    sub: 'सरल भाषा में पूछिए। विश्व संवाद केंद्र विश्वसनीय स्रोत खोजता है, जानकारी की जाँच करता है, तथ्य और राय को अलग करता है, और संदर्भों के साथ एक संरचित शोध रिपोर्ट लिखता है।',
+    ph: "कुछ भी खोजें…\nकोई भी विषय, व्यक्ति, कंपनी, देश, ऐतिहासिक घटना, विज्ञान, तकनीक, राजनीति, अर्थव्यवस्था, स्वास्थ्य, व्यापार, कानून, खेल आदि पर शोध करें।",
+    fuPh: 'आगे का प्रश्न पूछें, तुलना करें, या और गहराई में जाएँ…',
+    research: 'शोध करें', ask: 'पूछें', busyBtn: 'शोध जारी…',
+    brief: 'संक्षिप्त', standard: 'मानक', deep: 'गहन शोध', deepShort: 'गहन',
+    srcOn: 'पहले स्रोत चुनें', srcOff: 'स्रोत: स्वतः',
+    newBtn: 'नया शोध', histBtn: 'इतिहास',
+    modeBadge: { brief: 'संक्षिप्त मोड', standard: 'मानक मोड', deep: 'गहन शोध मोड' },
+    srcBadge: n => `${n} स्रोत चुने गए`,
+    sources: 'स्रोत',
+    noSources: 'सामान्य ज्ञान से उत्तर दिया गया — इस प्रश्न के लिए लाइव स्रोतों की आवश्यकता नहीं थी।',
+    pickTitle: 'यह शोध किन स्रोतों से करूँ?',
+    pickSub: 'एक या अधिक स्रोत चुनें — या इंजन को सभी विश्वसनीय स्रोत स्वतः उपयोग करने दें।',
+    finding: 'आपके विषय के लिए सबसे प्रामाणिक स्रोत खोजे जा रहे हैं…',
+    autoBtn: '⚡ स्वतः — सभी विश्वसनीय स्रोत',
+    startBtn: n => `चुने गए ${n} स्रोतों से शोध करें →`,
+    writing: s => `✍️ रिपोर्ट का भाग ${s} लिखा जा रहा है… (लंबी रिपोर्ट स्वतः भागों में लिखी जाती है)`,
+    limitNote: 'इस रिपोर्ट ने अपनी पूरी लेखन-सीमा उपयोग कर ली। "आगे लिखो" जैसा प्रश्न पूछें और यह आगे लिखेगा।',
+    trace: ["प्रश्न को समझा जा रहा है","विश्वसनीय स्रोत खोजे जा रहे हैं","जानकारी की जाँच हो रही है","दोहराव हटाना और विरोधाभास पहचानना","तथ्य और राय अलग किए जा रहे हैं","शोध रिपोर्ट लिखी जा रही है"],
+  }
+};
+const t = () => I18N[state.lang];
+
+/* ============================= book library (IndexedDB + PDF.js) ============================= */
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+const BookDB = {
+  db: null,
+  open() {
+    return new Promise((res, rej) => {
+      if (this.db) return res(this.db);
+      const req = indexedDB.open('vsk_library', 1);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('books')) db.createObjectStore('books', { keyPath: 'id' });
+      };
+      req.onsuccess = e => { this.db = e.target.result; res(this.db); };
+      req.onerror = e => rej(e.target.error);
+    });
+  },
+  async all() {
+    const db = await this.open();
+    return new Promise((res, rej) => {
+      const out = [];
+      const store = db.transaction('books', 'readonly').objectStore('books');
+      store.openCursor().onsuccess = e => {
+        const cur = e.target.result;
+        if (cur) { out.push(cur.value); cur.continue(); } else res(out);
+      };
+    });
+  },
+  async put(book) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('books','readwrite'); tx.objectStore('books').put(book); tx.oncomplete = res; tx.onerror = e => rej(e.target.error); }); },
+  async del(id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('books','readwrite'); tx.objectStore('books').delete(id); tx.oncomplete = res; tx.onerror = e => rej(e.target.error); }); }
+};
+
+// extract text page-by-page so we can cite page numbers
+async function extractPdf(file, onProgress) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const pages = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    const text = content.items.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim();
+    pages.push({ page: p, text });
+    if (onProgress) onProgress(p, pdf.numPages);
+  }
+  return pages;
+}
+
+let LIBRARY = []; // in-memory cache of books [{id,title,pages:[{page,text}],chars}]
+
+async function loadLibrary() {
+  try { LIBRARY = await BookDB.all(); } catch(e){ LIBRARY = []; }
+  renderLibrary();
+}
+
+function openLibrary(){ document.getElementById('libScrim').classList.add('open'); renderLibrary(); }
+function closeLibrary(){ document.getElementById('libScrim').classList.remove('open'); }
+
+function renderLibrary(){
+  const list = document.getElementById('libList');
+  if (!LIBRARY.length) {
+    list.innerHTML = `<div class="lib-empty">No books yet. Add a PDF above to build your personal research library.</div>`;
+    return;
+  }
+  list.innerHTML = '';
+  LIBRARY.forEach(b => {
+    const el = document.createElement('div');
+    el.className = 'book';
+    const kb = Math.round(b.chars/1000);
+    el.innerHTML = `<span class="bi">📕</span>
+      <div class="bmeta"><div class="bt">${esc(b.title)}</div>
+        <div class="bs">${b.pages.length} pages · ${kb}k characters of text</div></div>
+      <button class="bx" title="Remove">✕</button>`;
+    el.querySelector('.bx').onclick = async () => {
+      if (!confirm('Remove "' + b.title + '" from your library?')) return;
+      await BookDB.del(b.id);
+      LIBRARY = LIBRARY.filter(x => x.id !== b.id);
+      renderLibrary();
+      toast('Book removed');
+    };
+    list.appendChild(el);
+  });
+}
+
+async function handleBookFiles(files){
+  const prog = document.getElementById('libProg');
+  for (const file of files) {
+    if (file.type !== 'application/pdf') { toast('Only PDF files are supported'); continue; }
+    prog.style.display = 'block';
+    prog.textContent = `Reading "${file.name}"… 0%`;
+    try {
+      const pages = await extractPdf(file, (p, total) => {
+        prog.textContent = `Reading "${file.name}"… ${Math.round(p/total*100)}%`;
+      });
+      const chars = pages.reduce((n, pg) => n + pg.text.length, 0);
+      if (chars < 40) { toast(`"${file.name}" has no readable text (it may be a scanned/image PDF).`); prog.style.display='none'; continue; }
+      const book = { id: 'bk_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), title: file.name.replace(/\.pdf$/i,''), pages, chars };
+      await BookDB.put(book);
+      LIBRARY.push(book);
+      renderLibrary();
+      toast(`Added "${book.title}" (${pages.length} pages)`);
+    } catch (e) {
+      toast(`Could not read "${file.name}". ${e.message || ''}`);
+    }
+  }
+  prog.style.display = 'none';
+}
+
+// Search the library for a query; returns relevant page snippets with citations.
+function searchLibrary(query, maxSnippets = 6){
+  if (!LIBRARY.length) return [];
+  const words = query.toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+  const stop = new Set(['the','a','an','of','in','on','and','or','to','for','is','are','what','who','why','how','when','where','tell','me','about','research','explain','give','report']);
+  const terms = [...new Set(words.filter(w => w.length > 2 && !stop.has(w)))];
+  if (!terms.length) return [];
+  const scored = [];
+  for (const book of LIBRARY) {
+    for (const pg of book.pages) {
+      if (!pg.text) continue;
+      const lc = pg.text.toLowerCase();
+      let score = 0;
+      for (const term of terms) { let idx = lc.indexOf(term); while (idx !== -1) { score++; idx = lc.indexOf(term, idx + term.length); } }
+      if (score > 0) scored.push({ book: book.title, page: pg.page, score, text: pg.text });
+    }
+  }
+  scored.sort((a,b) => b.score - a.score);
+  return scored.slice(0, maxSnippets).map(s => ({
+    book: s.book, page: s.page,
+    excerpt: s.text.length > 1200 ? s.text.slice(0, 1200) + '…' : s.text
+  }));
+}
+
+const EXAMPLES = {
+  en: [
+    "Tell me everything about Artificial Intelligence",
+    "Research India's economy",
+    "Explain quantum computing",
+    "Compare Tesla vs BYD",
+    "History of the Roman Empire",
+    "Why did World War II happen?",
+    "Explain black holes",
+    "Research the Mughal Empire",
+    "Latest developments in SpaceX",
+    "Give me a report on OpenAI",
+    "Research climate change",
+    "Analyze the Indian stock market",
+  ],
+  hi: [
+    "आर्टिफिशियल इंटेलिजेंस के बारे में सब कुछ बताइए",
+    "भारत की अर्थव्यवस्था पर शोध करें",
+    "क्वांटम कंप्यूटिंग समझाइए",
+    "मुग़ल साम्राज्य पर शोध करें",
+    "द्वितीय विश्व युद्ध क्यों हुआ?",
+    "ब्लैक होल क्या होते हैं?",
+    "भारतीय शेयर बाज़ार का विश्लेषण करें",
+    "जलवायु परिवर्तन पर शोध करें",
+    "रोमन साम्राज्य का इतिहास",
+    "SpaceX की नवीनतम उपलब्धियाँ",
+  ]
+};
+
+/* ============================= init ============================= */
+function renderChips(){
+  const pool = [...EXAMPLES[state.lang]].sort(() => Math.random() - .5).slice(0, 6);
+  const chips = document.getElementById('chips');
+  chips.innerHTML = '';
+  pool.forEach(q => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = q;
+    b.onclick = () => { document.getElementById('homeInput').value = q; startFromHome(); };
+    chips.appendChild(b);
+  });
+}
+
+(function init(){
+  renderChips();
+  // enter to search
+  bindEnter('homeInput', startFromHome);
+  bindEnter('fuInput', startFollowUp);
+  // auto-grow textareas
+  ['homeInput','fuInput'].forEach(id => {
+    const t = document.getElementById(id);
+    t.addEventListener('input', () => { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 220) + 'px'; });
+  });
+  // book library: file input + drag/drop
+  const fileInput = document.getElementById('libFile');
+  fileInput.addEventListener('change', e => { handleBookFiles([...e.target.files]); fileInput.value = ''; });
+  const drop = document.getElementById('libDrop');
+  ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+  drop.addEventListener('drop', e => { if (e.dataTransfer.files.length) handleBookFiles([...e.dataTransfer.files]); });
+  loadLibrary();
+})();
+
+function bindEnter(id, fn){
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); fn(); }
+  });
+}
+
+/* ============================= UI helpers ============================= */
+function setMode(m){
+  state.mode = m;
+  document.querySelectorAll('.mode-pill[data-mode]').forEach(p => p.classList.toggle('on', p.dataset.mode === m));
+}
+function setLang(l){
+  state.lang = l;
+  document.querySelectorAll('#langSwitch .mode-pill').forEach(p => p.classList.toggle('on', p.dataset.lang === l));
+  applyLang();
+}
+function applyLang(){
+  const s = t();
+  document.getElementById('eyebrow').textContent = s.eyebrow;
+  document.getElementById('heroTitle').innerHTML = s.hero;
+  document.getElementById('heroSub').textContent = s.sub;
+  document.getElementById('homeInput').placeholder = s.ph;
+  document.getElementById('fuInput').placeholder = s.fuPh;
+  document.getElementById('homeGoLbl').textContent = s.research;
+  document.getElementById('newBtnLbl').textContent = s.newBtn;
+  document.getElementById('histBtnLbl').textContent = s.histBtn;
+  const libLbl = document.getElementById('libBtnLbl'); if (libLbl) libLbl.textContent = state.lang === 'hi' ? 'पुस्तकें' : 'Books';
+  document.getElementById('srcToggleLbl').textContent = state.pickSources ? s.srcOn : s.srcOff;
+  if (!state.busy) document.getElementById('fuGo').textContent = s.ask;
+  // depth pills (home has long label, composer short)
+  document.querySelectorAll('[data-mode="brief"]').forEach(p => p.textContent = s.brief);
+  document.querySelectorAll('[data-mode="standard"]').forEach(p => p.textContent = s.standard);
+  const homeDeep = document.querySelector('#homeConsole [data-mode="deep"]');
+  const fuDeep = document.querySelector('#fuConsole [data-mode="deep"]');
+  if (homeDeep) homeDeep.textContent = s.deep;
+  if (fuDeep) fuDeep.textContent = s.deepShort;
+  renderChips();
+}
+function toggleSrcPick(){
+  state.pickSources = !state.pickSources;
+  document.getElementById('srcToggle').classList.toggle('on', state.pickSources);
+  document.getElementById('srcToggleLbl').textContent = state.pickSources ? t().srcOn : t().srcOff;
+}
+function toggleTheme(){
+  const el = document.documentElement;
+  el.dataset.theme = el.dataset.theme === 'light' ? 'dark' : 'light';
+}
+function toggleDrawer(open){
+  document.getElementById('drawer').classList.toggle('open', open);
+  document.getElementById('scrim').style.display = open ? 'block' : 'none';
+  if (open) renderHistory();
+}
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function goHome(){
+  document.getElementById('homeView').style.display = 'block';
+  document.getElementById('resultsView').style.display = 'none';
+  document.getElementById('composer').style.display = 'none';
+  document.getElementById('newBtn').style.display = 'none';
+  state.current = null; state.convo = [];
+  const t = document.getElementById('homeInput'); t.value=''; t.focus();
+  window.scrollTo({top:0});
+}
+function showResults(){
+  document.getElementById('homeView').style.display = 'none';
+  document.getElementById('resultsView').style.display = 'block';
+  document.getElementById('composer').style.display = 'block';
+  document.getElementById('newBtn').style.display = 'inline-flex';
+}
+function esc(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function domain(u){ try { return new URL(u).hostname.replace(/^www\./,''); } catch(e){ return u; } }
+
+/* ============================= research flow ============================= */
+function startFromHome(){
+  const q = document.getElementById('homeInput').value.trim();
+  if (!q || state.busy) return;
+  // new session
+  state.current = { id: Date.now(), title: q.slice(0, 90), mode: state.mode, exchanges: [], domains: null, starred: false, ts: new Date() };
+  state.sessions.unshift(state.current);
+  state.convo = [];
+  document.getElementById('resultsView').innerHTML = '';
+  showResults();
+  if (state.pickSources) showSourcePicker(q);
+  else runResearch(q);
+}
+
+/* ---- source picker: AI proposes sources, user chooses ---- */
+async function showSourcePicker(query){
+  state.busy = true; setBusy(true);
+  const s = t();
+  const rv = document.getElementById('resultsView');
+  const card = document.createElement('section');
+  card.className = 'exchange';
+  card.innerHTML = `
+    <div class="query-line"><span class="q">${esc(query)}</span><span class="badge">${s.modeBadge[state.mode]}</span></div>
+    <div class="picker">
+      <h3>${esc(s.pickTitle)}</h3>
+      <div class="ps">${esc(s.pickSub)}</div>
+      <div class="loading"><span class="spinner"></span> ${esc(s.finding)}</div>
+      <div class="src-grid" style="display:none"></div>
+      <div class="picker-actions" style="display:none">
+        <button class="search-btn auto-go">${s.autoBtn}</button>
+        <button class="ghost-btn sel-go" disabled>${s.startBtn(0).replace('0','…')}</button>
+      </div>
+    </div>`;
+  rv.appendChild(card);
+  card.scrollIntoView({behavior:'smooth', block:'start'});
+
+  const picker = card.querySelector('.picker');
+  const grid = picker.querySelector('.src-grid');
+  const actions = picker.querySelector('.picker-actions');
+  const autoGo = picker.querySelector('.auto-go');
+  const selGo = picker.querySelector('.sel-go');
+  const selected = new Set();
+
+  const begin = (domains) => {
+    if (domains && domains.length) state.current.domains = domains;
+    picker.style.opacity = '.55'; picker.style.pointerEvents = 'none';
+    state.busy = false; // runResearch manages its own busy state
+    runResearch(query);
+  };
+
+  // fetch AI-suggested sources for this query
+  let suggestions = [];
+  try {
+    const resp = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        messages: [{ role: 'user', content:
+`Propose the 8 most authoritative and relevant web sources for researching this query: "${query}".
+Mix source types where relevant: official/government sites, research & academic (journals, arXiv, PubMed, Google Scholar), international organizations (WHO, UN, World Bank, IMF), data providers, official company sites/filings, encyclopedic background, and reputable news.
+IMPORTANT — if the query concerns India, Indian entities, or would benefit from Indian perspectives, strongly prefer authoritative INDIAN sources, for example: pib.gov.in (Press Information Bureau), india.gov.in, rbi.org.in (Reserve Bank of India), mospi.gov.in (Ministry of Statistics), niti.gov.in (NITI Aayog), sebi.gov.in, mea.gov.in (Ministry of External Affairs), data.gov.in, isro.gov.in, prsindia.org (PRS Legislative Research), rbidocs.rbi.org.in, ibef.org, ncert.nic.in, epw.in (Economic & Political Weekly), thehindu.com, indianexpress.com, economictimes.indiatimes.com, livemint.com, business-standard.com, downtoearth.org.in, bharatdiscovery.org (भारतकोश, a large Hindi encyclopedia — always a good pick for Hindi research and Indian history/culture/biographies) — choosing whichever genuinely fit the query, alongside relevant global sources.
+Respond ONLY with a raw JSON array, no markdown fences, no prose:
+[{"name":"World Bank","domain":"worldbank.org","why":"one short line on what it offers for this query"}]
+Rules: "domain" must be a bare registrable domain that actually exists. Names short. ${state.lang === 'hi' ? 'Write every "why" in Hindi.' : ''}` }]
+      })
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message);
+    const raw = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+    suggestions = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    if (!Array.isArray(suggestions)) throw new Error('bad format');
+  } catch (e) {
+    // graceful fallback set (mix of global + Indian authoritative sources)
+    suggestions = [
+      { name:'भारतकोश (Bharatkosh)', domain:'bharatdiscovery.org', why: state.lang==='hi' ? 'हिन्दी विश्वकोश — इतिहास, संस्कृति, जीवनी' : 'Hindi encyclopedia — history, culture, biographies' },
+      { name:'PIB (Govt. of India)', domain:'pib.gov.in', why: state.lang==='hi' ? 'भारत सरकार की आधिकारिक प्रेस विज्ञप्तियाँ' : 'Official Government of India releases' },
+      { name:'Reserve Bank of India', domain:'rbi.org.in', why: state.lang==='hi' ? 'मौद्रिक नीति व आर्थिक डेटा' : 'Monetary policy & economic data' },
+      { name:'The Hindu', domain:'thehindu.com', why: state.lang==='hi' ? 'विश्वसनीय भारतीय समाचार' : 'Trusted Indian news' },
+      { name:'Wikipedia', domain:'wikipedia.org', why: state.lang==='hi' ? 'पृष्ठभूमि और अवलोकन' : 'Background & overview' },
+      { name:'Google Scholar', domain:'scholar.google.com', why: state.lang==='hi' ? 'शोध पत्र' : 'Research papers' },
+      { name:'Reuters', domain:'reuters.com', why: state.lang==='hi' ? 'वैश्विक समाचार एजेंसी' : 'Global news agency' },
+      { name:'World Bank', domain:'worldbank.org', why: state.lang==='hi' ? 'वैश्विक डेटा' : 'Global data' },
+      { name:'data.gov.in', domain:'data.gov.in', why: state.lang==='hi' ? 'भारत के सार्वजनिक डेटासेट' : "India's open datasets" },
+    ];
+  }
+
+  picker.querySelector('.loading').style.display = 'none';
+  grid.style.display = 'grid';
+  actions.style.display = 'flex';
+
+  suggestions.slice(0, 10).forEach(src => {
+    if (!src || !src.domain) return;
+    const b = document.createElement('button');
+    b.className = 'src-card';
+    b.innerHTML = `<div class="sn">${esc(src.name || src.domain)} <span class="tick">✓</span></div>
+                   <div class="sdm">${esc(src.domain)}</div>
+                   <div class="sw">${esc(src.why || '')}</div>`;
+    b.onclick = () => {
+      if (selected.has(src.domain)) { selected.delete(src.domain); b.classList.remove('sel'); }
+      else { selected.add(src.domain); b.classList.add('sel'); }
+      selGo.disabled = selected.size === 0;
+      selGo.textContent = selected.size ? t().startBtn(selected.size) : t().startBtn(1).replace('1','…');
+    };
+    grid.appendChild(b);
+  });
+
+  autoGo.onclick = () => begin(null);
+  selGo.onclick = () => { if (selected.size) begin([...selected]); };
+
+  state.busy = false; setBusy(false);
+}
+
+function startFollowUp(){
+  const t = document.getElementById('fuInput');
+  const q = t.value.trim();
+  if (!q || state.busy || !state.current) return;
+  t.value = ''; t.style.height = 'auto';
+  runResearch(q);
+}
+
+function systemPrompt(mode){
+  const depth = {
+    brief: "MODE: BRIEF. Produce a tight ~200–300 word briefing: a 2-sentence Executive Summary, 4–6 Key Findings as bullets, and a one-line Bottom Line. Nothing else.",
+    standard: "MODE: STANDARD. Produce a well-structured, substantive report (~800–1200 words) with the most relevant of these sections: Executive Summary, Key Findings, Background, Detailed Analysis, Different Perspectives, Risks or Limitations, Future Outlook, Conclusion. The interface writes long reports in parts: if you are cut off, you will be asked to continue, so write the full report naturally and never compress it to fit — depth over brevity.",
+    deep: "MODE: DEEP RESEARCH. You are writing the FIRST part of a long, exhaustive report that continues in several follow-up parts. In THIS part write a substantial, detailed opening: a rich Executive Summary (a full paragraph), then a thorough Key Findings section (6-10 detailed bullets), then begin a Background/Overview. Write in depth with specifics — names, dates, numbers, mechanisms. Do NOT try to cover everything now and do NOT write a Conclusion yet; later parts add Analysis, Timeline, Statistics, Perspectives, Risks, FAQ, and Conclusion. Never compress to save space."
+  }[mode];
+  const langRule = state.lang === 'hi'
+    ? '\n- LANGUAGE: Write the ENTIRE report in Hindi (हिंदी, Devanagari script) — every heading, table, and sentence. Keep proper nouns, brand names, and unavoidable technical terms in English where natural (e.g. "GDP", "SpaceX").'
+    : '';
+  const srcRule = (state.current && state.current.domains && state.current.domains.length)
+    ? `\n- SOURCE RESTRICTION: The user chose specific sources for this research: ${state.current.domains.join(', ')}. Your web searches are limited to these domains. Base the report on what they provide, cite them, and if they cannot answer part of the question, say so explicitly rather than inventing information.`
+    : '';
+  return `You are Vishwa Samwad Kendra, a universal AI research engine. Research the user's query and write a structured research report.
+
+Rules:
+- Use web search when the topic involves current events, recent data, specific companies/products/people, statistics, or anything that benefits from verification. Skip search only for timeless conceptual questions you can answer authoritatively.
+- Cross-check information across sources; if sources conflict, say so explicitly and present both sides.
+- Clearly distinguish established facts from opinions, estimates, and disputed claims (e.g. "Fact:", "Analysts' view:", "Disputed:").
+- Prioritize primary and official sources (government sites, filings, papers, official docs) over aggregators. For India-related topics, prioritize authoritative Indian sources: PIB, RBI, ministry websites, MoSPI, NITI Aayog, SEBI, data.gov.in, ISRO, PRS Legislative Research, and reputable Indian outlets (The Hindu, Indian Express, Economic Times, Mint, Business Standard). Also consult bharatdiscovery.org (भारतकोश), a large Hindi encyclopedia, especially for Hindi-language research and Indian history, culture, biographies, and general knowledge.
+- Write in clean Markdown: ## section headings, bullet lists, tables where they genuinely help. No top-level # title — start directly with the first section.
+- Do NOT write a References section; sources are displayed separately by the interface.
+- Neutral, precise, professional tone. No filler.
+- ${depth}
+- If this is a follow-up, build on the prior conversation rather than repeating it.${langRule}${srcRule}`;
+}
+
+async function runResearch(query){
+  state.busy = true;
+  setBusy(true);
+
+  // search the user's book library for relevant pages
+  const bookHits = searchLibrary(query);
+
+  // build exchange card
+  const L = t();
+  const rv = document.getElementById('resultsView');
+  const ex = document.createElement('section');
+  ex.className = 'exchange';
+  ex.innerHTML = `
+    <div class="query-line">
+      <span class="q">${esc(query)}</span>
+      <span class="badge">${L.modeBadge[state.mode]}</span>
+      ${state.current.domains && state.current.domains.length ? `<span class="badge">🎯 ${L.srcBadge(state.current.domains.length)}</span>` : ''}
+      ${bookHits.length ? `<span class="badge book-badge">📚 ${bookHits.length} book page${bookHits.length>1?'s':''}</span>` : ''}
+    </div>
+    <div class="trace">${L.trace.map((s,i)=>`<div class="trace-step" data-i="${i}"><span class="dot"></span>${s}</div>`).join('')}</div>
+    <div class="result-grid" style="display:none">
+      <div>
+        <article class="report"><div class="report-body"></div><div class="note" style="display:none"></div>
+          <div class="actions">
+            <button class="act" data-a="copy">⧉ Copy report</button>
+            <button class="act" data-a="pdf">⇩ Export PDF</button>
+            <button class="act" data-a="word">⇩ Export Word</button>
+            <button class="act" data-a="cite">❝ Copy citations</button>
+            <button class="act" data-a="share">↗ Share</button>
+          </div>
+        </article>
+      </div>
+      <aside class="rail"><h4>${esc(L.sources)}</h4><div class="src-list"></div></aside>
+    </div>`;
+  rv.appendChild(ex);
+  ex.scrollIntoView({behavior:'smooth', block:'start'});
+
+  // animate trace
+  const steps = ex.querySelectorAll('.trace-step');
+  let si = 0;
+  steps[0].classList.add('active');
+  const traceTimer = setInterval(() => {
+    if (si < steps.length - 1) {
+      steps[si].classList.remove('active'); steps[si].classList.add('done');
+      si++; steps[si].classList.add('active');
+    }
+  }, 2600);
+
+  try {
+    const sources = [];
+    const seen = new Set();
+    let md = '';
+    let stopReason = null;
+
+    // restrict live search to the user's chosen sources, if any
+    const searchTool = { type: "web_search_20250305", name: "web_search" };
+    if (state.current.domains && state.current.domains.length) {
+      searchTool.allowed_domains = state.current.domains;
+    }
+
+    const callAPI = async (messages) => {
+      let response;
+      // one automatic retry for transient network failures
+      for (let attempt = 1; ; attempt++) {
+        try {
+          response = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-6",
+              max_tokens: 1000,
+              system: systemPrompt(state.mode),
+              messages,
+              tools: [searchTool]
+            })
+          });
+          break;
+        } catch (netErr) {
+          if (attempt >= 2) throw netErr;
+          await new Promise(res => setTimeout(res, 1500));
+        }
+      }
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message || 'The research service returned an error.');
+      let text = '';
+      (data.content || []).forEach(block => {
+        if (block.type === 'text') {
+          text += block.text;
+          (block.citations || []).forEach(c => {
+            if (c.url && !seen.has(c.url)) { seen.add(c.url); sources.push({ url: c.url, title: c.title || domain(c.url) }); }
+          });
+        }
+        if (block.type === 'web_search_tool_result' && Array.isArray(block.content)) {
+          block.content.forEach(r => {
+            if (r.url && !seen.has(r.url)) { seen.add(r.url); sources.push({ url: r.url, title: r.title || domain(r.url) }); }
+          });
+        }
+      });
+      return { text, stopReason: data.stop_reason };
+    };
+
+    const grid = ex.querySelector('.result-grid');
+    const body = ex.querySelector('.report-body');
+    const note = ex.querySelector('.note');
+    const showProgress = (seg) => {
+      grid.style.display = 'grid';
+      body.innerHTML = DOMPurify.sanitize(marked.parse(md));
+      note.style.display = 'block';
+      note.textContent = t().writing(seg);
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    };
+
+    // segment 1 — include book context if any relevant pages were found
+    let firstQuery = query;
+    if (bookHits.length) {
+      const bookBlock = bookHits.map((h, i) =>
+        `[BOOK EXCERPT ${i+1}] From "${h.book}", page ${h.page}:\n"${h.excerpt}"`
+      ).join('\n\n');
+      firstQuery =
+`The user is researching: "${query}"
+
+The user has these excerpts from their own PDF book library that may be relevant. When you use information from any excerpt, you MUST cite it inline in the format 【Book: "<title>", p.<page>】 right after the sentence. Prefer the books for anything they cover, and also use web search for broader context, verification, and anything the books don't cover.
+
+${bookBlock}
+
+Now write the research report on: "${query}"`;
+    }
+    let r = await callAPI([...state.convo, { role: 'user', content: firstQuery }]);
+    md = r.text; stopReason = r.stopReason;
+
+    // add books used as sources in the rail
+    bookHits.forEach(h => {
+      const key = 'book:' + h.book + ':' + h.page;
+      if (!seen.has(key)) { seen.add(key); sources.push({ url: null, book: h.book, page: h.page, title: `${h.book} — page ${h.page}` }); }
+    });
+
+    // Section plan per mode. Deep research ACTIVELY writes many more sections
+    // (it doesn't wait to be truncated), so reports are genuinely long & detailed.
+    const PLAN = {
+      brief: [],
+      standard: [
+        'Continue the SAME report. Add these sections next, with ## headings, in depth, without repeating anything already written: Detailed Analysis, Different Perspectives, Risks or Limitations.',
+        'Continue the SAME report. Add these final sections with ## headings, without repeating anything: Future Outlook, Conclusion.'
+      ],
+      deep: [
+        'Continue the SAME research report. Do NOT repeat anything already written. Add these sections next, each with a ## heading and in thorough detail: Background & Context, Detailed Analysis (with specifics — names, dates, numbers, mechanisms).',
+        'Continue the SAME report without repeating. Add: Timeline of key events (as a list or table), and Statistics & Data (use a Markdown table where possible).',
+        'Continue the SAME report without repeating. Add: Different Perspectives / Debates, Advantages & Disadvantages, and Key Risks.',
+        'Continue the SAME report without repeating. Add: Notable Facts, Expert Opinions (label them as opinions), and a Frequently Asked Questions section (4-6 Q&As).',
+        'Continue the SAME report without repeating. Add the final sections: Future Outlook and a substantive Conclusion. Then stop.'
+      ]
+    }[state.mode];
+
+    const plan = PLAN || [];
+    for (let i = 0; i < plan.length; i++) {
+      showProgress(i + 2);
+      const contMessages = [
+        ...state.convo,
+        { role: 'user', content: query },
+        { role: 'assistant', content: md },
+        { role: 'user', content: plan[i] + ' Continue directly with the new section heading — no preamble, no "here is the continuation", and do not rewrite earlier sections.' }
+      ];
+      try {
+        const rr = await callAPI(contMessages);
+        if (rr.text && rr.text.trim()) {
+          md += '\n\n' + rr.text.trim();
+        }
+      } catch (contErr) {
+        // if one continuation fails (e.g. quota), keep what we have and stop expanding
+        break;
+      }
+    }
+    stopReason = 'end_turn';
+
+    if (!md.trim()) md = "_No report text was returned. Please try rephrasing your question._";
+
+    // update conversation history (text only, keeps context light)
+    state.convo.push({ role: 'user', content: query });
+    state.convo.push({ role: 'assistant', content: md });
+
+    // save exchange in session
+    state.current.exchanges.push({ q: query, md, sources });
+
+    // render
+    clearInterval(traceTimer);
+    steps.forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
+    setTimeout(() => { ex.querySelector('.trace').style.display = 'none'; }, 500);
+
+    grid.style.display = 'grid';
+    body.innerHTML = DOMPurify.sanitize(marked.parse(md));
+    note.style.display = 'none';
+    const list = ex.querySelector('.src-list');
+    const renderSrc = (s, i) => {
+      if (s.book) {
+        return `<div class="src" style="cursor:default">
+           <div class="n" style="color:var(--amber)">📕 [${i+1}]</div>
+           <div class="t">${esc(s.book)}</div>
+           <div class="d">Page ${s.page} · your library</div>
+         </div>`;
+      }
+      return `<a class="src" href="${esc(s.url)}" target="_blank" rel="noopener">
+           <div class="n">[${i+1}]</div>
+           <div class="t">${esc(s.title)}</div>
+           <div class="d">${esc(domain(s.url))}</div>
+         </a>`;
+    };
+    if (sources.length) {
+      // show book sources first, then web
+      const ordered = [...sources.filter(s=>s.book), ...sources.filter(s=>!s.book)];
+      list.innerHTML = ordered.slice(0, 14).map(renderSrc).join('');
+    } else {
+      list.innerHTML = `<div class="none">${esc(t().noSources)}</div>`;
+    }
+
+    // wire actions
+    const exchange = state.current.exchanges[state.current.exchanges.length - 1];
+    ex.querySelector('[data-a="copy"]').onclick  = () => copyText(exchange.md, 'Report copied');
+    ex.querySelector('[data-a="pdf"]').onclick   = () => window.print();
+    ex.querySelector('[data-a="word"]').onclick  = () => exportWord(exchange);
+    ex.querySelector('[data-a="cite"]').onclick  = () => copyCitations(exchange);
+    ex.querySelector('[data-a="share"]').onclick = () => copyText(`${exchange.q}\n\n${exchange.md}`, 'Report copied — paste it anywhere to share');
+
+  } catch (err) {
+    clearInterval(traceTimer);
+    ex.querySelector('.trace').style.display = 'none';
+    const grid = ex.querySelector('.result-grid');
+    grid.style.display = 'grid';
+    const isNet = /failed to fetch|networkerror|load failed/i.test(err.message || '');
+    const hi = state.lang === 'hi';
+    const title = hi ? 'शोध विफल रहा।' : 'Research failed.';
+    const hint = isNet
+      ? (hi
+          ? 'रिसर्च सर्वर तक पहुँचा नहीं जा सका। अपना इंटरनेट कनेक्शन जाँचें और पुनः प्रयास करें। यदि यह बार-बार हो, तो साइट की मुफ़्त दैनिक AI सीमा समाप्त हो सकती है — कुछ समय बाद प्रयास करें।'
+          : 'Could not reach the research server. Check your internet connection and try again. If this keeps happening, the site may have hit its free daily AI limit — try again after some time.')
+      : esc(err.message || (hi ? 'अज्ञात त्रुटि।' : 'Unknown error.'));
+    grid.querySelector('.report').innerHTML =
+      `<div class="err"><b>${title}</b> ${hint}</div>
+       <div class="actions"><button class="act retry-btn">↻ ${hi ? 'पुनः प्रयास करें' : 'Retry'}</button></div>`;
+    grid.querySelector('.retry-btn').onclick = () => { ex.remove(); runResearch(query); };
+  } finally {
+    state.busy = false;
+    setBusy(false);
+  }
+}
+
+function setBusy(b){
+  document.getElementById('homeConsole').classList.toggle('busy', b);
+  document.getElementById('fuConsole').classList.toggle('busy', b);
+  document.getElementById('homeGo').disabled = b;
+  document.getElementById('fuGo').disabled = b;
+  document.getElementById('fuGo').textContent = b ? t().busyBtn : t().ask;
+}
+
+/* ============================= exports ============================= */
+async function copyText(text, msg){
+  try { await navigator.clipboard.writeText(text); toast(msg); }
+  catch(e){ toast('Copy failed — your browser blocked clipboard access'); }
+}
+function copyCitations(exch){
+  if (!exch.sources.length) { toast('No web sources to cite for this report'); return; }
+  const today = new Date().toLocaleDateString('en-US', {year:'numeric', month:'long', day:'numeric'});
+  const lines = exch.sources.map((s,i) => `[${i+1}] ${s.title}. ${s.url} (accessed ${today})`);
+  copyText(lines.join('\n'), 'Citations copied');
+}
+function exportWord(exch){
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(exch.q)}</title>
+    <style>body{font-family:Georgia,serif;line-height:1.6;max-width:720px;margin:40px auto}h1{font-size:26px}h2{border-bottom:1px solid #ccc;padding-bottom:4px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #bbb;padding:6px 10px;font-size:13px}</style>
+    </head><body><h1>${esc(exch.q)}</h1>${DOMPurify.sanitize(marked.parse(exch.md))}
+    ${exch.sources.length ? '<h2>References</h2><ol>' + exch.sources.map(s=>`<li><a href="${esc(s.url)}">${esc(s.title)}</a> — ${esc(s.url)}</li>`).join('') + '</ol>' : ''}
+    </body></html>`;
+  const blob = new Blob(['\ufeff' + html], { type: 'application/msword' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = exch.q.slice(0,60).replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'-').toLowerCase() + '.doc';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast('Word document downloaded');
+}
+
+/* ============================= history ============================= */
+function renderHistory(){
+  const list = document.getElementById('histList');
+  if (!state.sessions.length) {
+    list.innerHTML = `<div class="empty">No research yet.<br>Everything you research this session will appear here — star reports to pin them to the top.</div>`;
+    return;
+  }
+  const ordered = [...state.sessions].sort((a,b) => (b.starred - a.starred) || (b.id - a.id));
+  list.innerHTML = '';
+  ordered.forEach(s => {
+    const el = document.createElement('button');
+    el.className = 'hist';
+    el.innerHTML = `<span style="flex:1">
+        <span class="ht">${esc(s.title)}</span>
+        <div class="hm">${s.mode} · ${s.exchanges.length} report${s.exchanges.length===1?'':'s'} · ${s.ts.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+      </span>
+      <span class="star ${s.starred?'on':''}" title="Bookmark">${s.starred ? '★' : '☆'}</span>`;
+    el.querySelector('.star').onclick = (e) => { e.stopPropagation(); s.starred = !s.starred; renderHistory(); };
+    el.onclick = () => { openSession(s); toggleDrawer(false); };
+    list.appendChild(el);
+  });
+}
+
+function openSession(s){
+  state.current = s;
+  state.convo = [];
+  s.exchanges.forEach(e => {
+    state.convo.push({ role:'user', content: e.q });
+    state.convo.push({ role:'assistant', content: e.md });
+  });
+  const rv = document.getElementById('resultsView');
+  rv.innerHTML = '';
+  s.exchanges.forEach(exch => rv.appendChild(renderSavedExchange(exch)));
+  showResults();
+  window.scrollTo({top:0});
+}
+
+function renderSavedExchange(exch){
+  const ex = document.createElement('section');
+  ex.className = 'exchange';
+  ex.innerHTML = `
+    <div class="query-line"><span class="q">${esc(exch.q)}</span></div>
+    <div class="result-grid">
+      <div>
+        <article class="report"><div class="report-body">${DOMPurify.sanitize(marked.parse(exch.md))}</div>
+          <div class="actions">
+            <button class="act" data-a="copy">⧉ Copy report</button>
+            <button class="act" data-a="pdf">⇩ Export PDF</button>
+            <button class="act" data-a="word">⇩ Export Word</button>
+            <button class="act" data-a="cite">❝ Copy citations</button>
+          </div>
+        </article>
+      </div>
+      <aside class="rail"><h4>Sources</h4><div class="src-list">${
+        exch.sources.length
+          ? [...exch.sources.filter(s=>s.book), ...exch.sources.filter(s=>!s.book)].slice(0,14).map((s,i)=>
+              s.book
+                ? `<div class="src" style="cursor:default"><div class="n" style="color:var(--amber)">📕 [${i+1}]</div><div class="t">${esc(s.book)}</div><div class="d">Page ${s.page} · your library</div></div>`
+                : `<a class="src" href="${esc(s.url)}" target="_blank" rel="noopener"><div class="n">[${i+1}]</div><div class="t">${esc(s.title)}</div><div class="d">${esc(domain(s.url))}</div></a>`
+            ).join('')
+          : '<div class="none">Answered from general knowledge.</div>'
+      }</div></aside>
+    </div>`;
+  ex.querySelector('[data-a="copy"]').onclick = () => copyText(exch.md, 'Report copied');
+  ex.querySelector('[data-a="pdf"]').onclick  = () => window.print();
+  ex.querySelector('[data-a="word"]').onclick = () => exportWord(exch);
+  ex.querySelector('[data-a="cite"]').onclick = () => copyCitations(exch);
+  return ex;
+}
+</script>
+</body>
+</html>
