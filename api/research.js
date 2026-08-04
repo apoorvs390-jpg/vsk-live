@@ -61,20 +61,35 @@ export default async function handler(req, res) {
     return { status: r.status, data: await r.json() };
   };
 
+  // retry transient overload/rate-limit errors (503/429/"high demand") a few times
+  const callWithRetry = async (payload, tries = 4) => {
+    let last;
+    for (let i = 0; i < tries; i++) {
+      last = await call(payload);
+      const msg = (last.data && last.data.error && last.data.error.message) || '';
+      const transient = last.status === 503 || last.status === 429 ||
+        /high demand|overloaded|temporarily|try again later|unavailable/i.test(msg);
+      if (last.status === 200 || !transient) return last;
+      // wait a bit longer each attempt (0.8s, 1.6s, 2.4s)
+      await new Promise(r => setTimeout(r, 800 * (i + 1)));
+    }
+    return last;
+  };
+
   try {
-    let { status, data } = await call(geminiBody);
+    let { status, data } = await callWithRetry(geminiBody);
 
     // If search grounding is unavailable (quota/permissions), retry without it
     if (status !== 200 && wantsSearch) {
       const noTools = { ...geminiBody };
       delete noTools.tools;
-      ({ status, data } = await call(noTools));
+      ({ status, data } = await callWithRetry(noTools));
     }
 
     if (status !== 200) {
       const msg = (data && data.error && data.error.message) || "The AI service returned an error.";
       const friendly = status === 429
-        ? "Free daily AI limit reached for this site. Please try again in a while. (" + msg + ")"
+        ? "The free AI service is busy or over its daily limit right now. Please wait a moment and press Retry. (" + msg + ")"
         : msg;
       return res.status(200).json({ error: { message: friendly } });
     }
