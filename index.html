@@ -465,19 +465,20 @@ h1.hero em{font-style:italic;color:var(--accent)}
 <div class="lib-scrim" id="libScrim" onclick="if(event.target===this)closeLibrary()">
   <div class="lib" role="dialog" aria-label="Book library">
     <div class="lib-h">
-      <b id="libTitle">📚 My Book Library</b>
+      <b id="libTitle">📚 Book Library</b>
       <button class="icon-btn" onclick="closeLibrary()">Close</button>
     </div>
     <div class="lib-body">
       <div class="lib-drop" id="libDrop" onclick="document.getElementById('libFile').click()">
         <div class="big">⬆️</div>
-        <div class="t1" id="libDropT1">Add a PDF book</div>
-        <div class="t2" id="libDropT2">Click to choose a PDF, or drag one here. The book is saved in this browser and searched alongside the web.</div>
+        <div class="t1" id="libDropT1">Upload PDF books</div>
+        <div class="t2" id="libDropT2">Click to choose PDFs, or drag them here. Books are stored on the server and searched for every visitor, alongside the web sources.</div>
       </div>
       <input type="file" id="libFile" accept="application/pdf" multiple style="display:none">
       <div class="lib-prog" id="libProg"></div>
+      <div id="libCount" style="margin:12px 2px 0;font-size:12.5px;font-weight:600;color:var(--ink-soft)"></div>
       <div class="lib-list" id="libList"></div>
-      <div class="lib-note" id="libNote">📌 Books are stored privately in this browser on this device only. They aren't uploaded to any server and won't appear on other devices or for people you share the link with. Only PDFs with real (selectable) text work — scanned image-only PDFs can't be read.</div>
+      <div class="lib-note" id="libNote">📌 Books are stored on the server (Supabase) and searched by meaning for every visitor. Only PDFs with real (selectable) text work — scanned image-only PDFs can't be read. Large uploads process page-by-page and may pause if the free daily AI limit is reached — just wait and they resume.</div>
     </div>
   </div>
 </div>
@@ -551,40 +552,12 @@ const I18N = {
 };
 const t = () => I18N[state.lang];
 
-/* ============================= book library (IndexedDB + PDF.js) ============================= */
+/* ============================= book library (server / Supabase + PDF.js) ============================= */
 if (window.pdfjsLib) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 }
-const BookDB = {
-  db: null,
-  open() {
-    return new Promise((res, rej) => {
-      if (this.db) return res(this.db);
-      const req = indexedDB.open('vsk_library', 1);
-      req.onupgradeneeded = e => {
-        const db = e.target.result;
-        if (!db.objectStoreNames.contains('books')) db.createObjectStore('books', { keyPath: 'id' });
-      };
-      req.onsuccess = e => { this.db = e.target.result; res(this.db); };
-      req.onerror = e => rej(e.target.error);
-    });
-  },
-  async all() {
-    const db = await this.open();
-    return new Promise((res, rej) => {
-      const out = [];
-      const store = db.transaction('books', 'readonly').objectStore('books');
-      store.openCursor().onsuccess = e => {
-        const cur = e.target.result;
-        if (cur) { out.push(cur.value); cur.continue(); } else res(out);
-      };
-    });
-  },
-  async put(book) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('books','readwrite'); tx.objectStore('books').put(book); tx.oncomplete = res; tx.onerror = e => rej(e.target.error); }); },
-  async del(id) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('books','readwrite'); tx.objectStore('books').delete(id); tx.oncomplete = res; tx.onerror = e => rej(e.target.error); }); }
-};
 
-// extract text page-by-page so we can cite page numbers
+// extract text page-by-page (for citations)
 async function extractPdf(file, onProgress) {
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
@@ -593,94 +566,114 @@ async function extractPdf(file, onProgress) {
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
     const text = content.items.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim();
-    pages.push({ page: p, text });
+    if (text.length > 5) pages.push({ page: p, text });
     if (onProgress) onProgress(p, pdf.numPages);
   }
   return pages;
 }
 
-let LIBRARY = []; // in-memory cache of books [{id,title,pages:[{page,text}],chars}]
+let LIBRARY = []; // [{id,title,pages,created_at}]
 
 async function loadLibrary() {
-  try { LIBRARY = await BookDB.all(); } catch(e){ LIBRARY = []; }
+  try {
+    const r = await fetch('/api/books');
+    const data = await r.json();
+    LIBRARY = data.books || [];
+  } catch(e){ LIBRARY = []; }
   renderLibrary();
 }
 
-function openLibrary(){ document.getElementById('libScrim').classList.add('open'); renderLibrary(); }
+function openLibrary(){ document.getElementById('libScrim').classList.add('open'); loadLibrary(); }
 function closeLibrary(){ document.getElementById('libScrim').classList.remove('open'); }
 
 function renderLibrary(){
   const list = document.getElementById('libList');
+  const count = document.getElementById('libCount');
+  if (count) count.textContent = LIBRARY.length ? `${LIBRARY.length} book${LIBRARY.length>1?'s':''} in the shared library` : '';
   if (!LIBRARY.length) {
-    list.innerHTML = `<div class="lib-empty">No books yet. Add a PDF above to build your personal research library.</div>`;
+    list.innerHTML = `<div class="lib-empty">No books yet. Upload PDFs above — they're stored on the server and searched for every visitor.</div>`;
     return;
   }
   list.innerHTML = '';
   LIBRARY.forEach(b => {
     const el = document.createElement('div');
     el.className = 'book';
-    const kb = Math.round(b.chars/1000);
     el.innerHTML = `<span class="bi">📕</span>
       <div class="bmeta"><div class="bt">${esc(b.title)}</div>
-        <div class="bs">${b.pages.length} pages · ${kb}k characters of text</div></div>
+        <div class="bs">${b.pages} pages</div></div>
       <button class="bx" title="Remove">✕</button>`;
     el.querySelector('.bx').onclick = async () => {
-      if (!confirm('Remove "' + b.title + '" from your library?')) return;
-      await BookDB.del(b.id);
-      LIBRARY = LIBRARY.filter(x => x.id !== b.id);
-      renderLibrary();
-      toast('Book removed');
+      if (!confirm('Remove "' + b.title + '" from the library? This affects all visitors.')) return;
+      try {
+        await fetch('/api/books?id=' + encodeURIComponent(b.id), { method: 'DELETE' });
+        LIBRARY = LIBRARY.filter(x => x.id !== b.id);
+        renderLibrary();
+        toast('Book removed');
+      } catch(e){ toast('Could not remove book'); }
     };
     list.appendChild(el);
   });
 }
 
+// Upload PDFs: extract text in the browser, then send pages to the server in batches
+// (server chunks + embeds + stores in Supabase). Handles the free embedding rate limit.
 async function handleBookFiles(files){
   const prog = document.getElementById('libProg');
   for (const file of files) {
     if (file.type !== 'application/pdf') { toast('Only PDF files are supported'); continue; }
     prog.style.display = 'block';
-    prog.textContent = `Reading "${file.name}"… 0%`;
+    const sizeMB = (file.size / (1024*1024)).toFixed(1);
+    const title = file.name.replace(/\.pdf$/i,'');
+    prog.textContent = `Reading "${title}" (${sizeMB} MB)…`;
+    let pages;
     try {
-      const pages = await extractPdf(file, (p, total) => {
-        prog.textContent = `Reading "${file.name}"… ${Math.round(p/total*100)}%`;
+      pages = await extractPdf(file, (p, total) => {
+        prog.textContent = `Reading "${title}" (${sizeMB} MB)… ${Math.round(p/total*100)}%`;
       });
-      const chars = pages.reduce((n, pg) => n + pg.text.length, 0);
-      if (chars < 40) { toast(`"${file.name}" has no readable text (it may be a scanned/image PDF).`); prog.style.display='none'; continue; }
-      const book = { id: 'bk_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), title: file.name.replace(/\.pdf$/i,''), pages, chars };
-      await BookDB.put(book);
-      LIBRARY.push(book);
-      renderLibrary();
-      toast(`Added "${book.title}" (${pages.length} pages)`);
-    } catch (e) {
-      toast(`Could not read "${file.name}". ${e.message || ''}`);
+    } catch(e){ toast(`Could not read "${title}". ${e.message||''}`); continue; }
+
+    const chars = pages.reduce((n, pg) => n + pg.text.length, 0);
+    if (chars < 40) { toast(`"${title}" has no readable text (scanned/image PDF).`); continue; }
+
+    // send pages to server in batches of 5 (keeps each request under the timeout)
+    const BATCH = 5;
+    let bookId = null;
+    let done = 0;
+    let ok = true;
+    for (let i = 0; i < pages.length; i += BATCH) {
+      const batch = pages.slice(i, i + BATCH);
+      prog.textContent = `Uploading "${title}" — page ${Math.min(i+BATCH,pages.length)}/${pages.length}…`;
+      let attempt = 0;
+      while (true) {
+        try {
+          const r = await fetch('/api/books', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ title, pages: batch, bookId, totalPages: pages.length })
+          });
+          const data = await r.json();
+          if (data.error) { toast(`Upload error: ${data.error}`); ok = false; break; }
+          bookId = data.bookId || bookId;
+          if (data.rateLimited) {
+            // hit the free embedding limit — wait and retry this batch
+            attempt++;
+            prog.textContent = `Free embedding limit reached — waiting 30s then continuing "${title}" (${done}/${pages.length})…`;
+            await new Promise(r => setTimeout(r, 30000));
+            continue;
+          }
+          done = Math.min(i + BATCH, pages.length);
+          break;
+        } catch(e){
+          attempt++;
+          if (attempt > 3) { toast(`Upload failed for "${title}" at page ${i+1}.`); ok = false; break; }
+          await new Promise(r => setTimeout(r, 3000));
+        }
+      }
+      if (!ok) break;
     }
+    if (ok) { toast(`Added "${title}" (${pages.length} pages)`); await loadLibrary(); }
   }
   prog.style.display = 'none';
-}
-
-// Search the library for a query; returns relevant page snippets with citations.
-function searchLibrary(query, maxSnippets = 6){
-  if (!LIBRARY.length) return [];
-  const words = query.toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
-  const stop = new Set(['the','a','an','of','in','on','and','or','to','for','is','are','what','who','why','how','when','where','tell','me','about','research','explain','give','report']);
-  const terms = [...new Set(words.filter(w => w.length > 2 && !stop.has(w)))];
-  if (!terms.length) return [];
-  const scored = [];
-  for (const book of LIBRARY) {
-    for (const pg of book.pages) {
-      if (!pg.text) continue;
-      const lc = pg.text.toLowerCase();
-      let score = 0;
-      for (const term of terms) { let idx = lc.indexOf(term); while (idx !== -1) { score++; idx = lc.indexOf(term, idx + term.length); } }
-      if (score > 0) scored.push({ book: book.title, page: pg.page, score, text: pg.text });
-    }
-  }
-  scored.sort((a,b) => b.score - a.score);
-  return scored.slice(0, maxSnippets).map(s => ({
-    book: s.book, page: s.page,
-    excerpt: s.text.length > 1200 ? s.text.slice(0, 1200) + '…' : s.text
-  }));
 }
 
 const EXAMPLES = {
@@ -972,8 +965,8 @@ async function runResearch(query){
   state.busy = true;
   setBusy(true);
 
-  // search the user's book library for relevant pages
-  const bookHits = searchLibrary(query);
+  // book search now happens on the server (Supabase semantic search) and comes
+  // back as book_sources in the API response — no client-side book handling needed.
 
   // build exchange card
   const L = t();
@@ -985,7 +978,6 @@ async function runResearch(query){
       <span class="q">${esc(query)}</span>
       <span class="badge">${L.modeBadge[state.mode]}</span>
       ${state.current.domains && state.current.domains.length ? `<span class="badge">🎯 ${L.srcBadge(state.current.domains.length)}</span>` : ''}
-      ${bookHits.length ? `<span class="badge book-badge">📚 ${bookHits.length} book page${bookHits.length>1?'s':''}</span>` : ''}
     </div>
     <div class="trace">${L.trace.map((s,i)=>`<div class="trace-step" data-i="${i}"><span class="dot"></span>${s}</div>`).join('')}</div>
     <div class="result-grid" style="display:none">
@@ -1066,6 +1058,11 @@ async function runResearch(query){
           });
         }
       });
+      // book sources found server-side (Supabase semantic search)
+      (data.book_sources || []).forEach(b => {
+        const key = 'book:' + b.book + ':' + b.page;
+        if (!seen.has(key)) { seen.add(key); sources.push({ url: null, book: b.book, page: b.page, title: `${b.book} — page ${b.page}` }); }
+      });
       return { text, stopReason: data.stop_reason };
     };
 
@@ -1080,29 +1077,9 @@ async function runResearch(query){
       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     };
 
-    // segment 1 — include book context if any relevant pages were found
-    let firstQuery = query;
-    if (bookHits.length) {
-      const bookBlock = bookHits.map((h, i) =>
-        `[BOOK EXCERPT ${i+1}] From "${h.book}", page ${h.page}:\n"${h.excerpt}"`
-      ).join('\n\n');
-      firstQuery =
-`The user is researching: "${query}"
-
-The user has these excerpts from their own PDF book library that may be relevant. When you use information from any excerpt, you MUST cite it inline in the format 【Book: "<title>", p.<page>】 right after the sentence. Prefer the books for anything they cover, and also use web search for broader context, verification, and anything the books don't cover.
-
-${bookBlock}
-
-Now write the research report on: "${query}"`;
-    }
-    let r = await callAPI([...state.convo, { role: 'user', content: firstQuery }]);
+    // segment 1 — the server handles book retrieval & injection automatically
+    let r = await callAPI([...state.convo, { role: 'user', content: query }]);
     md = r.text; stopReason = r.stopReason;
-
-    // add books used as sources in the rail
-    bookHits.forEach(h => {
-      const key = 'book:' + h.book + ':' + h.page;
-      if (!seen.has(key)) { seen.add(key); sources.push({ url: null, book: h.book, page: h.page, title: `${h.book} — page ${h.page}` }); }
-    });
 
     // Section plan per mode. Deep research ACTIVELY writes many more sections
     // (it doesn't wait to be truncated), so reports are genuinely long & detailed.
@@ -1165,7 +1142,7 @@ Now write the research report on: "${query}"`;
         return `<div class="src" style="cursor:default">
            <div class="n" style="color:var(--amber)">📕 [${i+1}]</div>
            <div class="t">${esc(s.book)}</div>
-           <div class="d">Page ${s.page} · your library</div>
+           <div class="d">Page ${s.page} · library</div>
          </div>`;
       }
       return `<a class="src" href="${esc(s.url)}" target="_blank" rel="noopener">
@@ -1304,7 +1281,7 @@ function renderSavedExchange(exch){
         exch.sources.length
           ? [...exch.sources.filter(s=>s.book), ...exch.sources.filter(s=>!s.book)].slice(0,14).map((s,i)=>
               s.book
-                ? `<div class="src" style="cursor:default"><div class="n" style="color:var(--amber)">📕 [${i+1}]</div><div class="t">${esc(s.book)}</div><div class="d">Page ${s.page} · your library</div></div>`
+                ? `<div class="src" style="cursor:default"><div class="n" style="color:var(--amber)">📕 [${i+1}]</div><div class="t">${esc(s.book)}</div><div class="d">Page ${s.page} · library</div></div>`
                 : `<a class="src" href="${esc(s.url)}" target="_blank" rel="noopener"><div class="n">[${i+1}]</div><div class="t">${esc(s.title)}</div><div class="d">${esc(domain(s.url))}</div></a>`
             ).join('')
           : '<div class="none">Answered from general knowledge.</div>'
