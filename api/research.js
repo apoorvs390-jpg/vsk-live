@@ -1,10 +1,26 @@
 // Vercel serverless function: /api/research
 // FREE ENGINE VERSION — powered by Google's Gemini API free tier (no credit card needed).
-// Translates the Vishwa Samwad Kendra frontend's requests into Gemini requests,
-// runs them with live Google Search grounding, and translates the answers back.
-// Your free API key stays on the server and is never exposed to visitors.
+// Now also searches a Supabase book library (semantic search) on every query,
+// so answers draw from your uploaded 100+ books AND the live web.
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+import { embed, sbRpc } from "./_lib.js";
+
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-flash-lite-latest";
+
+export const config = { maxDuration: 60 };
+
+// find the most relevant book passages for a query, across all books in Supabase
+async function searchBooks(query) {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) return [];
+  try {
+    const vec = await embed(query);
+    const hits = await sbRpc("match_chunks", { query_embedding: vec, match_count: 8 });
+    // keep only reasonably similar passages
+    return (hits || []).filter(h => h.similarity > 0.35);
+  } catch (e) {
+    return []; // never let book search break the main research
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -22,6 +38,10 @@ export default async function handler(req, res) {
   const messages = Array.isArray(body.messages) ? body.messages : [];
   const wantsSearch = Array.isArray(body.tools) && body.tools.length > 0;
 
+  // find the latest user query for book search
+  const lastUser = [...messages].reverse().find(m => m.role === "user");
+  const bookHits = lastUser ? await searchBooks(typeof lastUser.content === "string" ? lastUser.content : "") : [];
+
   // Always-on source: injected into every search so it's consulted for every query
   const ALWAYS_SOURCES = ["bharatdiscovery.org"];
 
@@ -35,6 +55,14 @@ export default async function handler(req, res) {
     system += `\n- STRICT SOURCE RULE: Only use information from these websites: ${merged.join(", ")}. In every search, prefer these sites (you may add site:domain to queries). Ignore results from other sites.`;
   } else if (wantsSearch) {
     system += `\n- ALWAYS-INCLUDE SOURCE: In addition to other trusted sources, you MUST run at least one search against bharatdiscovery.org (भारतकोश, a large Hindi encyclopedia) using a "site:bharatdiscovery.org" query for this topic. If it has a relevant article, incorporate its information and cite it. If it has nothing relevant, note that briefly and proceed with other sources.`;
+  }
+
+  // If relevant book passages were found, add them to the system prompt with citation rules
+  if (bookHits.length) {
+    const bookBlock = bookHits.map((h, i) =>
+      `[BOOK ${i+1}] From "${h.book_title}", page ${h.page}:\n"${h.content}"`
+    ).join("\n\n");
+    system += `\n\n--- LIBRARY EXCERPTS ---\nThe site has a private book library. These passages from it are relevant to the user's query. Prefer them for anything they cover, and cite each use inline exactly as 【पुस्तक: "<title>", पृष्ठ <page>】 (or 【Book: "<title>", p.<page>】 in English). Also use web search for broader context and verification.\n\n${bookBlock}\n--- END LIBRARY EXCERPTS ---`;
   }
 
   // Translate Anthropic-style messages -> Gemini contents
@@ -116,9 +144,18 @@ export default async function handler(req, res) {
       }
     }
 
+    // include unique book sources so the frontend shows them in the Sources rail
+    const bookSources = [];
+    const bseen = new Set();
+    for (const h of bookHits) {
+      const key = h.book_title + ":" + h.page;
+      if (!bseen.has(key)) { bseen.add(key); bookSources.push({ book: h.book_title, page: h.page }); }
+    }
+
     // Respond in the Anthropic-like shape the frontend already understands
     return res.status(200).json({
       content: [{ type: "text", text, citations }],
+      book_sources: bookSources,
       stop_reason: cand.finishReason === "MAX_TOKENS" ? "max_tokens" : "end_turn"
     });
   } catch (err) {
