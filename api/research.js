@@ -36,11 +36,15 @@ export default async function handler(req, res) {
 
   const body = req.body || {};
   const messages = Array.isArray(body.messages) ? body.messages : [];
-  const wantsSearch = Array.isArray(body.tools) && body.tools.length > 0;
+  const scope = body.scope || 'both';
+  const wantsSearch = scope !== 'books' && Array.isArray(body.tools) && body.tools.length > 0;
 
   // find the latest user query for book search
   const lastUser = [...messages].reverse().find(m => m.role === "user");
-  const bookHits = lastUser ? await searchBooks(typeof lastUser.content === "string" ? lastUser.content : "") : [];
+  // search books unless the user chose web-only
+  const bookHits = (scope !== 'web' && lastUser)
+    ? await searchBooks(typeof lastUser.content === "string" ? lastUser.content : "")
+    : [];
 
   // Always-on source: injected into every search so it's consulted for every query
   const ALWAYS_SOURCES = ["bharatdiscovery.org"];
@@ -62,7 +66,9 @@ export default async function handler(req, res) {
     const bookBlock = bookHits.map((h, i) =>
       `[BOOK ${i+1}] From "${h.book_title}", page ${h.page}:\n"${h.content}"`
     ).join("\n\n");
-    system += `\n\n--- LIBRARY EXCERPTS ---\nThe site has a private book library. These passages from it are relevant to the user's query. Prefer them for anything they cover, and cite each use inline exactly as 【पुस्तक: "<title>", पृष्ठ <page>】 (or 【Book: "<title>", p.<page>】 in English). Also use web search for broader context and verification.\n\n${bookBlock}\n--- END LIBRARY EXCERPTS ---`;
+    system += `\n\n--- LIBRARY EXCERPTS ---\nThe site has a private book library. These passages from it are relevant to the user's query. Prefer them for anything they cover, and cite each use inline exactly as 【पुस्तक: "<title>", पृष्ठ <page>】 (or 【Book: "<title>", p.<page>】 in English).${scope === 'books' ? ' Base your entire answer ONLY on these library excerpts and general knowledge — do NOT use the web. If the books do not cover something, say so honestly.' : ' Also use web search for broader context and verification.'}\n\n${bookBlock}\n--- END LIBRARY EXCERPTS ---`;
+  } else if (scope === 'books') {
+    system += `\n\nNote: The user chose to search ONLY their book library, but no relevant passages were found in the books for this query. Tell the user honestly that the books don't appear to cover this topic, and answer briefly from general knowledge if you can.`;
   }
 
   // Translate Anthropic-style messages -> Gemini contents

@@ -4,23 +4,33 @@ export const GEMINI_KEY = process.env.GEMINI_API_KEY;
 export const SUPABASE_URL = process.env.SUPABASE_URL;          // e.g. https://xxxx.supabase.co
 export const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;  // service_role key (server-side only)
 
-// Embed a piece of text with Google's free text-embedding-004 (768 dims)
-export async function embed(text) {
+// Embed a piece of text with Google's free text-embedding-004 (768 dims).
+// Retries a few times on transient rate-limit / overload so per-minute spikes
+// don't fail the whole book. A hard daily-quota error is surfaced to the caller.
+export async function embed(text, tries = 4) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_KEY}`;
-  const r = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      model: "models/text-embedding-004",
-      content: { parts: [{ text: text.slice(0, 8000) }] }
-    })
-  });
-  const data = await r.json();
-  if (!r.ok || !data.embedding) {
+  let lastErr;
+  for (let i = 0; i < tries; i++) {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "models/text-embedding-004",
+        content: { parts: [{ text: (text || "").slice(0, 8000) }] }
+      })
+    });
+    const data = await r.json();
+    if (r.ok && data.embedding) return data.embedding.values;
     const msg = (data.error && data.error.message) || "embedding failed";
-    const err = new Error(msg); err.status = r.status; throw err;
+    lastErr = new Error(msg); lastErr.status = r.status;
+    // 429/503 = transient: wait and retry. Other errors: fail immediately.
+    if (r.status === 429 || r.status === 503 || /rate|overload|unavailable|try again/i.test(msg)) {
+      await new Promise(res => setTimeout(res, 1500 * (i + 1)));
+      continue;
+    }
+    throw lastErr;
   }
-  return data.embedding.values; // array of 768 floats
+  throw lastErr;
 }
 
 // Minimal Supabase REST helpers

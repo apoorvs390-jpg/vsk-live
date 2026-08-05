@@ -57,6 +57,15 @@ export default async function handler(req, res) {
         id = created[0].id;
       }
 
+      // if this batch is being retried, clear any chunks already stored for these pages
+      // (prevents duplicates when a batch is re-sent after a rate-limit pause)
+      if (bookId && pages.length) {
+        const pageNums = pages.map(p => p.page).filter(n => n != null);
+        if (pageNums.length) {
+          try { await sbDelete(`chunks?book_id=eq.${id}&page=in.(${pageNums.join(",")})`); } catch(e){}
+        }
+      }
+
       // build chunks for this batch
       const rows = [];
       for (const pg of pages) {
@@ -66,26 +75,24 @@ export default async function handler(req, res) {
         }
       }
 
-      // embed sequentially (free tier is rate-limited); store as we go
+      // embed + insert each chunk immediately (so a timeout never loses progress)
       let embedded = 0;
       for (const row of rows) {
         try {
           row.embedding = await embed(row.content);
+          await sbInsert("chunks", [row]);   // insert right away
           embedded++;
         } catch (e) {
-          // if we hit the embedding rate limit, stop and tell the client to slow down / resume
-          if (e.status === 429 || /quota|rate|exhausted/i.test(e.message)) {
-            // insert whatever we embedded so far
-            const done = rows.filter(r => r.embedding);
-            if (done.length) await sbInsert("chunks", done);
+          // hard rate/quota limit — stop, report how far we got (already saved)
+          if (e.status === 429 || /quota|rate|exhausted|resource/i.test(e.message)) {
             return res.status(200).json({ bookId: id, embedded, rateLimited: true,
-              message: "Hit the free embedding limit. Wait a minute and continue — progress is saved." });
+              message: "Hit the free embedding limit. Wait ~30s and continue — progress is saved." });
           }
-          throw e;
+          // any other error — report it clearly
+          return res.status(200).json({ bookId: id, embedded, error: "Embedding/DB error: " + (e.message || "unknown") });
         }
       }
 
-      if (rows.length) await sbInsert("chunks", rows);
       return res.status(200).json({ bookId: id, embedded, rateLimited: false });
     }
 
