@@ -630,13 +630,16 @@ async function handleBookFiles(files){
     prog.textContent = `Reading "${title}" (${sizeMB} MB)…`;
     let pages;
     try {
+      console.log('[VSK] extracting PDF text…');
       pages = await extractPdf(file, (p, total) => {
         prog.textContent = `Reading "${title}" (${sizeMB} MB)… ${Math.round(p/total*100)}%`;
       });
-    } catch(e){ toast(`Could not read "${title}". ${e.message||''}`); continue; }
+      console.log('[VSK] extracted', pages.length, 'pages with text');
+    } catch(e){ console.error('[VSK] PDF read failed:', e); toast(`Could not read "${title}". ${e.message||''}`); continue; }
 
     const chars = pages.reduce((n, pg) => n + pg.text.length, 0);
-    if (chars < 40) { toast(`"${title}" has no readable text (scanned/image PDF).`); continue; }
+    console.log('[VSK] total chars:', chars);
+    if (chars < 40) { console.warn('[VSK] too few chars — treated as scanned'); toast(`"${title}" has no readable text (scanned/image PDF).`); continue; }
 
     // send pages to server in batches of 5 (keeps each request under the timeout)
     const BATCH = 5;
@@ -649,12 +652,14 @@ async function handleBookFiles(files){
       let attempt = 0;
       while (true) {
         try {
+          console.log('[VSK] POST batch, pages', i, '-', Math.min(i+BATCH,pages.length));
           const r = await fetch('/api/books', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ title, pages: batch, bookId, totalPages: pages.length })
           });
           const data = await r.json();
+          console.log('[VSK] batch response:', data);
           if (data.error) { toast(`Upload error: ${data.error}`); ok = false; break; }
           bookId = data.bookId || bookId;
           if (data.rateLimited) {
@@ -744,6 +749,7 @@ function renderChips(){
   ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
   ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
   drop.addEventListener('drop', e => { if (e.dataTransfer.files.length) handleBookFiles([...e.dataTransfer.files]); });
+  loadHistory();
   loadLibrary();
 })();
 
@@ -1136,6 +1142,7 @@ async function runResearch(query){
 
     // save exchange in session
     state.current.exchanges.push({ q: query, md, sources });
+    saveHistory();
 
     // render
     clearInterval(traceTimer);
@@ -1234,10 +1241,30 @@ function exportWord(exch){
 }
 
 /* ============================= history ============================= */
+/* ---- persistent history (survives refresh/close) ---- */
+function saveHistory(){
+  try {
+    const slim = state.sessions.slice(0, 60).map(s => ({
+      id: s.id, title: s.title, mode: s.mode, starred: !!s.starred,
+      ts: (s.ts instanceof Date ? s.ts.toISOString() : s.ts),
+      exchanges: s.exchanges.map(e => ({ q: e.q, md: e.md, sources: e.sources || [] }))
+    }));
+    localStorage.setItem('vsk_history', JSON.stringify(slim));
+  } catch(e){ /* storage full or blocked — ignore */ }
+}
+function loadHistory(){
+  try {
+    const raw = localStorage.getItem('vsk_history');
+    if (!raw) return;
+    const arr = JSON.parse(raw);
+    state.sessions = arr.map(s => ({ ...s, ts: new Date(s.ts) }));
+  } catch(e){ state.sessions = []; }
+}
+
 function renderHistory(){
   const list = document.getElementById('histList');
   if (!state.sessions.length) {
-    list.innerHTML = `<div class="empty">No research yet.<br>Everything you research this session will appear here — star reports to pin them to the top.</div>`;
+    list.innerHTML = `<div class="empty">No research yet.<br>Everything you research is saved here automatically — star reports to pin them to the top.</div>`;
     return;
   }
   const ordered = [...state.sessions].sort((a,b) => (b.starred - a.starred) || (b.id - a.id));
@@ -1245,12 +1272,13 @@ function renderHistory(){
   ordered.forEach(s => {
     const el = document.createElement('button');
     el.className = 'hist';
+    const ts = (s.ts instanceof Date ? s.ts : new Date(s.ts));
     el.innerHTML = `<span style="flex:1">
         <span class="ht">${esc(s.title)}</span>
-        <div class="hm">${s.mode} · ${s.exchanges.length} report${s.exchanges.length===1?'':'s'} · ${s.ts.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+        <div class="hm">${s.mode} · ${s.exchanges.length} report${s.exchanges.length===1?'':'s'} · ${ts.toLocaleDateString([], {day:'2-digit',month:'short'})} ${ts.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
       </span>
       <span class="star ${s.starred?'on':''}" title="Bookmark">${s.starred ? '★' : '☆'}</span>`;
-    el.querySelector('.star').onclick = (e) => { e.stopPropagation(); s.starred = !s.starred; renderHistory(); };
+    el.querySelector('.star').onclick = (e) => { e.stopPropagation(); s.starred = !s.starred; saveHistory(); renderHistory(); };
     el.onclick = () => { openSession(s); toggleDrawer(false); };
     list.appendChild(el);
   });
