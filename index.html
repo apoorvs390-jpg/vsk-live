@@ -618,7 +618,10 @@ function renderLibrary(){
 // Upload PDFs: extract text in the browser, then send pages to the server in batches
 // (server chunks + embeds + stores in Supabase). Handles the free embedding rate limit.
 async function handleBookFiles(files){
+  console.log('[VSK] handleBookFiles start ', files.length, 'file(s)');
   const prog = document.getElementById('libProg');
+  prog.style.display = 'block';
+  prog.textContent = `Starting upload of ${files.length} file(s)…`;
   for (const file of files) {
     if (file.type !== 'application/pdf') { toast('Only PDF files are supported'); continue; }
     prog.style.display = 'block';
@@ -730,8 +733,14 @@ function renderChips(){
   });
   // book library: file input + drag/drop
   const fileInput = document.getElementById('libFile');
-  fileInput.addEventListener('change', e => { handleBookFiles([...e.target.files]); fileInput.value = ''; });
+  fileInput.addEventListener('change', e => {
+    const files = [...e.target.files];
+    console.log('[VSK] files selected:', files.map(f => f.name));
+    if (files.length) handleBookFiles(files);
+  });
   const drop = document.getElementById('libDrop');
+  // reset value right before opening the picker so re-selecting the same file still fires 'change'
+  drop.addEventListener('click', () => { fileInput.value = ''; });
   ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
   ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
   drop.addEventListener('drop', e => { if (e.dataTransfer.files.length) handleBookFiles([...e.dataTransfer.files]); });
