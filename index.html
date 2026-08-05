@@ -8,7 +8,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
 <style>
 :root{
@@ -558,41 +557,44 @@ if (window.pdfjsLib) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 }
 
-// OCR worker (created once, reused). Hindi + English, tuned for speed.
-let _ocrWorker = null;
-async function getOcrWorker(onStatus){
-  if (_ocrWorker) return _ocrWorker;
-  if (onStatus) onStatus('Loading OCR engine (first time only)…');
-  _ocrWorker = await Tesseract.createWorker(['hin','eng'], 1, {
-    // LSTM-only engine is faster than the default combined mode
-  });
-  await _ocrWorker.setParameters({
-    tessedit_pageseg_mode: '3',      // fully automatic page segmentation (handles varied scanned layouts)
-    preserve_interword_spaces: '1'
-  });
-  return _ocrWorker;
-}
+// (OCR is done server-side via Gemini vision — see ocrPage below)
 
-// render one PDF page to an image and OCR it
+// render one PDF page to a PNG and OCR it via the server (Gemini vision — fast, good Hindi)
 async function ocrPage(page, onStatus){
-  // pick a scale that yields a reasonably large image (min ~1500px wide) for good OCR
   const base = page.getViewport({ scale: 1 });
-  const targetWidth = 1600;
-  let scale = Math.max(2, Math.min(3.5, targetWidth / base.width));
+  const scale = Math.max(1.5, Math.min(2.5, 1500 / base.width));
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement('canvas');
   canvas.width = Math.floor(viewport.width);
   canvas.height = Math.floor(viewport.height);
-  if (canvas.width < 50 || canvas.height < 50) return ''; // page render too small — skip
+  if (canvas.width < 50 || canvas.height < 50) return '';
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  // white background (scanned pages OCR better on solid white)
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvasContext: ctx, viewport }).promise;
-  const worker = await getOcrWorker(onStatus);
-  const { data } = await worker.recognize(canvas);
-  canvas.width = 0; canvas.height = 0; // free memory
-  return (data.text || '').replace(/\s+/g, ' ').trim();
+  const base64 = canvas.toDataURL('image/png').split(',')[1];
+  canvas.width = 0; canvas.height = 0;
+
+  // send to server for Gemini OCR, with retry on rate limit
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const r = await fetch('/api/books', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ocr: base64 })
+      });
+      const data = await r.json();
+      if (data.rateLimited) {
+        if (onStatus) onStatus('OCR limit reached — waiting 20s…');
+        await new Promise(res => setTimeout(res, 20000));
+        continue;
+      }
+      if (data.error) { console.warn('[VSK] OCR:', data.error); return ''; }
+      return (data.text || '').trim();
+    } catch(e){
+      await new Promise(res => setTimeout(res, 3000));
+    }
+  }
+  return '';
 }
 
 // extract text page-by-page. If a page has no embedded text (scanned), OCR it.
