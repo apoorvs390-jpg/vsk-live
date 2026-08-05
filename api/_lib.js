@@ -4,19 +4,21 @@ export const GEMINI_KEY = process.env.GEMINI_API_KEY;
 export const SUPABASE_URL = process.env.SUPABASE_URL;          // e.g. https://xxxx.supabase.co
 export const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;  // service_role key (server-side only)
 
-// Embed a piece of text with Google's free text-embedding-004 (768 dims).
+// Embed a piece of text with Google's embedding model (768 dims).
 // Retries a few times on transient rate-limit / overload so per-minute spikes
 // don't fail the whole book. A hard daily-quota error is surfaced to the caller.
 export async function embed(text, tries = 4) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_KEY}`;
+  const model = process.env.GEMINI_EMBED_MODEL || "gemini-embedding-001";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${GEMINI_KEY}`;
   let lastErr;
   for (let i = 0; i < tries; i++) {
     const r = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        model: "models/text-embedding-004",
-        content: { parts: [{ text: (text || "").slice(0, 8000) }] }
+        model: "models/" + model,
+        content: { parts: [{ text: (text || "").slice(0, 8000) }] },
+        outputDimensionality: 768
       })
     });
     const data = await r.json();
