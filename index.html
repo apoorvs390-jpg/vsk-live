@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
 <style>
 :root{
@@ -478,7 +479,7 @@ h1.hero em{font-style:italic;color:var(--accent)}
       <div class="lib-prog" id="libProg"></div>
       <div id="libCount" style="margin:12px 2px 0;font-size:12.5px;font-weight:600;color:var(--ink-soft)"></div>
       <div class="lib-list" id="libList"></div>
-      <div class="lib-note" id="libNote">📌 Books are stored on the server (Supabase) and searched by meaning for every visitor. Only PDFs with real (selectable) text work — scanned image-only PDFs can't be read. Large uploads process page-by-page and may pause if the free daily AI limit is reached — just wait and they resume.</div>
+      <div class="lib-note" id="libNote">📌 Books are stored on the server (Supabase) and searched by meaning for every visitor. Both text PDFs and scanned/image PDFs work — scanned pages are read automatically with OCR (Hindi + English), which is slower, so keep the tab open while large scanned books process.</div>
     </div>
   </div>
 </div>
@@ -557,15 +558,42 @@ if (window.pdfjsLib) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 }
 
-// extract text page-by-page (for citations)
-async function extractPdf(file, onProgress) {
+// OCR worker (created once, reused). Hindi + English.
+let _ocrWorker = null;
+async function getOcrWorker(onStatus){
+  if (_ocrWorker) return _ocrWorker;
+  if (onStatus) onStatus('Loading OCR engine (first time only)…');
+  _ocrWorker = await Tesseract.createWorker(['hin','eng']);
+  return _ocrWorker;
+}
+
+// render one PDF page to an image and OCR it
+async function ocrPage(page, onStatus){
+  const viewport = page.getViewport({ scale: 2 }); // higher scale = better OCR
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width; canvas.height = viewport.height;
+  const ctx = canvas.getContext('2d');
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  const worker = await getOcrWorker(onStatus);
+  const { data } = await worker.recognize(canvas);
+  canvas.width = 0; canvas.height = 0; // free memory
+  return (data.text || '').replace(/\s+/g, ' ').trim();
+}
+
+// extract text page-by-page. If a page has no embedded text (scanned), OCR it.
+async function extractPdf(file, onProgress, onStatus) {
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
   const pages = [];
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
-    const text = content.items.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim();
+    let text = content.items.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim();
+    // scanned page → OCR it
+    if (text.length <= 5) {
+      if (onStatus) onStatus(`Reading scanned page ${p}/${pdf.numPages} with OCR… (slow)`);
+      try { text = await ocrPage(page, onStatus); } catch(e){ console.warn('[VSK] OCR failed page', p, e); text = ''; }
+    }
     if (text.length > 5) pages.push({ page: p, text });
     if (onProgress) onProgress(p, pdf.numPages);
   }
@@ -633,51 +661,53 @@ async function handleBookFiles(files){
       console.log('[VSK] extracting PDF text…');
       pages = await extractPdf(file, (p, total) => {
         prog.textContent = `Reading "${title}" (${sizeMB} MB)… ${Math.round(p/total*100)}%`;
+      }, (statusMsg) => {
+        prog.textContent = `"${title}": ${statusMsg}`;
       });
       console.log('[VSK] extracted', pages.length, 'pages with text');
     } catch(e){ console.error('[VSK] PDF read failed:', e); toast(`Could not read "${title}". ${e.message||''}`); continue; }
 
     const chars = pages.reduce((n, pg) => n + pg.text.length, 0);
     console.log('[VSK] total chars:', chars);
-    if (chars < 40) { console.warn('[VSK] too few chars — treated as scanned'); toast(`"${title}" has no readable text (scanned/image PDF).`); continue; }
+    if (chars < 40) { console.warn('[VSK] no text even after OCR'); toast(`"${title}" — could not extract text even with OCR. The scan may be too blurry.`); continue; }
 
-    // send pages to server in batches of 5 (keeps each request under the timeout)
-    const BATCH = 5;
+    // send pages to server in small batches (keeps each request well under the timeout)
+    const BATCH = 3;
     let bookId = null;
     let done = 0;
     let ok = true;
-    for (let i = 0; i < pages.length; i += BATCH) {
+    for (let i = 0; i < pages.length; ) {
       const batch = pages.slice(i, i + BATCH);
       prog.textContent = `Uploading "${title}" — page ${Math.min(i+BATCH,pages.length)}/${pages.length}…`;
-      let attempt = 0;
-      while (true) {
-        try {
-          console.log('[VSK] POST batch, pages', i, '-', Math.min(i+BATCH,pages.length));
-          const r = await fetch('/api/books', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ title, pages: batch, bookId, totalPages: pages.length })
-          });
-          const data = await r.json();
-          console.log('[VSK] batch response:', data);
-          if (data.error) { toast(`Upload error: ${data.error}`); ok = false; break; }
-          bookId = data.bookId || bookId;
-          if (data.rateLimited) {
-            // hit the free embedding limit — wait and retry this batch
-            attempt++;
-            prog.textContent = `Free embedding limit reached — waiting 30s then continuing "${title}" (${done}/${pages.length})…`;
-            await new Promise(r => setTimeout(r, 30000));
-            continue;
-          }
+      let hitLimit = false;
+      try {
+        console.log('[VSK] POST batch, pages', i, '-', Math.min(i+BATCH,pages.length));
+        const r = await fetch('/api/books', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ title, pages: batch, bookId, totalPages: pages.length })
+        });
+        const data = await r.json();
+        console.log('[VSK] batch response:', data);
+        if (data.error) { toast(`Upload error: ${data.error}`); ok = false; break; }
+        bookId = data.bookId || bookId;
+        if (data.rateLimited) {
+          hitLimit = true;
+        } else {
           done = Math.min(i + BATCH, pages.length);
-          break;
-        } catch(e){
-          attempt++;
-          if (attempt > 3) { toast(`Upload failed for "${title}" at page ${i+1}.`); ok = false; break; }
-          await new Promise(r => setTimeout(r, 3000));
+          i += BATCH; // advance only on success
+        }
+      } catch(e){
+        console.error('[VSK] batch failed:', e);
+        hitLimit = true; // treat network hiccup like a pause and retry same batch
+      }
+      if (hitLimit) {
+        // wait then retry the SAME batch (do not advance i) — progress is saved server-side
+        for (let s = 30; s > 0; s--) {
+          prog.textContent = `Free daily/'per-minute' AI limit reached — waiting ${s}s, then resuming "${title}" (${done}/${pages.length} pages done)…`;
+          await new Promise(r => setTimeout(r, 1000));
         }
       }
-      if (!ok) break;
     }
     if (ok) { toast(`Added "${title}" (${pages.length} pages)`); await loadLibrary(); }
   }
