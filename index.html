@@ -416,6 +416,11 @@ h1.hero em{font-style:italic;color:var(--accent)}
           <button class="mode-pill on" data-mode="standard" onclick="setMode('standard')">Standard</button>
           <button class="mode-pill" data-mode="deep" onclick="setMode('deep')">Deep research</button>
         </div>
+        <div class="modes" id="scopeSwitch" role="group" aria-label="Search scope" title="Where to search: your books, the web, or both">
+          <button class="mode-pill on" data-scope="both" onclick="setScope('both')">📚+🌐</button>
+          <button class="mode-pill" data-scope="books" onclick="setScope('books')">📚 Books</button>
+          <button class="mode-pill" data-scope="web" onclick="setScope('web')">🌐 Web</button>
+        </div>
         <button class="icon-btn src-toggle-btn on" id="srcToggle" onclick="toggleSrcPick()" title="Choose which sources to research from before searching">🎯 <span id="srcToggleLbl">Pick sources first</span></button>
       </div>
       <button class="search-btn" id="homeGo" onclick="startFromHome()">
@@ -493,6 +498,7 @@ const API_URL = "/api/research"; // proxied through your own server — keeps yo
 
 const state = {
   mode: 'standard',
+  scope: 'both',       // 'both' | 'books' | 'web'
   lang: 'en',          // 'en' | 'hi'
   pickSources: true,   // show source picker before researching
   busy: false,
@@ -559,10 +565,10 @@ if (window.pdfjsLib) {
 
 // (OCR is done server-side via Gemini vision — see ocrPage below)
 
-// render one PDF page to a PNG and OCR it via the server (Gemini vision — fast, good Hindi)
+// render one PDF page to a compact JPEG and OCR it via the server (Gemini vision)
 async function ocrPage(page, onStatus){
   const base = page.getViewport({ scale: 1 });
-  const scale = Math.max(1.5, Math.min(2.5, 1500 / base.width));
+  const scale = Math.max(1.1, Math.min(1.7, 1100 / base.width)); // smaller = faster OCR, still readable
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement('canvas');
   canvas.width = Math.floor(viewport.width);
@@ -571,10 +577,10 @@ async function ocrPage(page, onStatus){
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvasContext: ctx, viewport }).promise;
-  const base64 = canvas.toDataURL('image/png').split(',')[1];
+  // JPEG at 70% quality = far smaller than PNG, still fine for OCR
+  const base64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
   canvas.width = 0; canvas.height = 0;
 
-  // send to server for Gemini OCR, with retry on rate limit
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       const r = await fetch('/api/books', {
@@ -597,24 +603,44 @@ async function ocrPage(page, onStatus){
   return '';
 }
 
-// extract text page-by-page. If a page has no embedded text (scanned), OCR it.
+// extract text page-by-page. Text pages are read instantly; scanned pages are
+// OCR'd via Gemini. Scanned pages are processed in PARALLEL batches for speed.
 async function extractPdf(file, onProgress, onStatus) {
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-  const pages = [];
-  for (let p = 1; p <= pdf.numPages; p++) {
+  const total = pdf.numPages;
+  const results = new Array(total).fill(null);
+  const scannedPages = [];
+
+  // pass 1: grab embedded text; mark scanned pages for OCR
+  for (let p = 1; p <= total; p++) {
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
-    let text = content.items.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim();
-    // scanned page → OCR it
-    if (text.length <= 5) {
-      if (onStatus) onStatus(`Reading scanned page ${p}/${pdf.numPages} with OCR… (slow)`);
-      try { text = await ocrPage(page, onStatus); } catch(e){ console.warn('[VSK] OCR failed page', p, e); text = ''; }
-    }
-    if (text.length > 5) pages.push({ page: p, text });
-    if (onProgress) onProgress(p, pdf.numPages);
+    const text = content.items.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim();
+    if (text.length > 5) { results[p-1] = { page: p, text }; }
+    else { scannedPages.push(p); }
+    if (onProgress) onProgress(p, total);
   }
-  return pages;
+
+  // pass 2: OCR scanned pages in parallel batches of 6
+  if (scannedPages.length) {
+    const PAR = 6;
+    let done = 0;
+    for (let i = 0; i < scannedPages.length; i += PAR) {
+      const group = scannedPages.slice(i, i + PAR);
+      if (onStatus) onStatus(`OCR reading ${done+1}-${Math.min(done+group.length, scannedPages.length)} of ${scannedPages.length} scanned pages…`);
+      await Promise.all(group.map(async (pnum) => {
+        try {
+          const page = await pdf.getPage(pnum);
+          const txt = await ocrPage(page);
+          if (txt && txt.length > 5) results[pnum-1] = { page: pnum, text: txt };
+        } catch(e){ console.warn('[VSK] OCR failed page', pnum, e); }
+      }));
+      done += group.length;
+    }
+  }
+
+  return results.filter(Boolean);
 }
 
 let LIBRARY = []; // [{id,title,pages,created_at}]
@@ -811,6 +837,13 @@ function setMode(m){
   state.mode = m;
   document.querySelectorAll('.mode-pill[data-mode]').forEach(p => p.classList.toggle('on', p.dataset.mode === m));
 }
+function setScope(s){
+  state.scope = s;
+  document.querySelectorAll('#scopeSwitch .mode-pill').forEach(p => p.classList.toggle('on', p.dataset.scope === s));
+  // if searching books-only, source-picker for web sources doesn't apply
+  const srcBtn = document.getElementById('srcToggle');
+  if (srcBtn) srcBtn.style.opacity = (s === 'books') ? '.5' : '1';
+}
 function setLang(l){
   state.lang = l;
   document.querySelectorAll('#langSwitch .mode-pill').forEach(p => p.classList.toggle('on', p.dataset.lang === l));
@@ -885,7 +918,7 @@ function startFromHome(){
   state.convo = [];
   document.getElementById('resultsView').innerHTML = '';
   showResults();
-  if (state.pickSources) showSourcePicker(q);
+  if (state.pickSources && state.scope !== 'books') showSourcePicker(q);
   else runResearch(q);
 }
 
@@ -1039,6 +1072,7 @@ async function runResearch(query){
     <div class="query-line">
       <span class="q">${esc(query)}</span>
       <span class="badge">${L.modeBadge[state.mode]}</span>
+      <span class="badge">${state.scope === 'books' ? '📚 Books only' : state.scope === 'web' ? '🌐 Web only' : '📚+🌐 Books & Web'}</span>
       ${state.current.domains && state.current.domains.length ? `<span class="badge">🎯 ${L.srcBadge(state.current.domains.length)}</span>` : ''}
     </div>
     <div class="trace">${L.trace.map((s,i)=>`<div class="trace-step" data-i="${i}"><span class="dot"></span>${s}</div>`).join('')}</div>
@@ -1081,6 +1115,9 @@ async function runResearch(query){
     if (state.current.domains && state.current.domains.length) {
       searchTool.allowed_domains = state.current.domains;
     }
+    // scope: 'books' = no web tool (books only); 'web'/'both' = include web tool
+    const useWeb = state.scope !== 'books';
+    const toolsArr = useWeb ? [searchTool] : [];
 
     const callAPI = async (messages) => {
       let response;
@@ -1095,7 +1132,8 @@ async function runResearch(query){
               max_tokens: 1000,
               system: systemPrompt(state.mode),
               messages,
-              tools: [searchTool]
+              tools: toolsArr,
+              scope: state.scope
             })
           });
           break;
