@@ -558,21 +558,36 @@ if (window.pdfjsLib) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 }
 
-// OCR worker (created once, reused). Hindi + English.
+// OCR worker (created once, reused). Hindi + English, tuned for speed.
 let _ocrWorker = null;
 async function getOcrWorker(onStatus){
   if (_ocrWorker) return _ocrWorker;
   if (onStatus) onStatus('Loading OCR engine (first time only)…');
-  _ocrWorker = await Tesseract.createWorker(['hin','eng']);
+  _ocrWorker = await Tesseract.createWorker(['hin','eng'], 1, {
+    // LSTM-only engine is faster than the default combined mode
+  });
+  await _ocrWorker.setParameters({
+    tessedit_pageseg_mode: '3',      // fully automatic page segmentation (handles varied scanned layouts)
+    preserve_interword_spaces: '1'
+  });
   return _ocrWorker;
 }
 
 // render one PDF page to an image and OCR it
 async function ocrPage(page, onStatus){
-  const viewport = page.getViewport({ scale: 2 }); // higher scale = better OCR
+  // pick a scale that yields a reasonably large image (min ~1500px wide) for good OCR
+  const base = page.getViewport({ scale: 1 });
+  const targetWidth = 1600;
+  let scale = Math.max(2, Math.min(3.5, targetWidth / base.width));
+  const viewport = page.getViewport({ scale });
   const canvas = document.createElement('canvas');
-  canvas.width = viewport.width; canvas.height = viewport.height;
-  const ctx = canvas.getContext('2d');
+  canvas.width = Math.floor(viewport.width);
+  canvas.height = Math.floor(viewport.height);
+  if (canvas.width < 50 || canvas.height < 50) return ''; // page render too small — skip
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  // white background (scanned pages OCR better on solid white)
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvasContext: ctx, viewport }).promise;
   const worker = await getOcrWorker(onStatus);
   const { data } = await worker.recognize(canvas);
