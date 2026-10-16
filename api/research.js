@@ -4,6 +4,7 @@
 // so answers draw from your uploaded 100+ books AND the live web.
 
 import { embed, sbRpc } from "./_lib.js";
+import { VSK_NETWORK } from "./_sources.js";
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-flash-lite-latest";
 
@@ -58,6 +59,8 @@ export default async function handler(req, res) {
     const merged = Array.from(new Set([...allowed, ...ALWAYS_SOURCES]));
     system += `\n- STRICT SOURCE RULE: Only use information from these websites: ${merged.join(", ")}. In every search, prefer these sites (you may add site:domain to queries). Ignore results from other sites.`;
   } else if (wantsSearch) {
+    const vskList = VSK_NETWORK.map(s => `${s.domain} (${s.name} — ${s.region})`).join(", ");
+    system += `\n- VSK NETWORK SOURCES: The Vishwa Samvad Kendra (VSK) network publishes news, articles and archives on Bharat, Hindu society, the Rashtriya Swayamsevak Sangh (RSS) and its associated work, seva activities, culture, and regional events. For any query touching these themes (or a specific state/region), run searches using \"site:<domain>\" against the most relevant of these sites — national ones (vskbharat.com, samvad.in) plus the regional site matching the topic: ${vskList}. Incorporate and cite what they provide. Treat them as organisational/advocacy publications: attribute their claims to them and distinguish their reporting from independent sources. If they have nothing relevant, proceed without them.`;
     system += `\n- ALWAYS-INCLUDE SOURCE: In addition to other trusted sources, you MUST run at least one search against bharatdiscovery.org (भारतकोश, a large Hindi encyclopedia) using a "site:bharatdiscovery.org" query for this topic. If it has a relevant article, incorporate its information and cite it. If it has nothing relevant, note that briefly and proceed with other sources.`;
   }
 
