@@ -60,8 +60,8 @@ export default async function handler(req, res) {
     system += `\n- STRICT SOURCE RULE: Only use information from these websites: ${merged.join(", ")}. In every search, prefer these sites (you may add site:domain to queries). Ignore results from other sites.`;
   } else if (wantsSearch) {
     const vskList = VSK_NETWORK.map(s => `${s.domain} (${s.name} — ${s.region})`).join(", ");
-    system += `\n- VSK NETWORK SOURCES: The Vishwa Samvad Kendra (VSK) network publishes news, articles and archives on Bharat, Hindu society, the Rashtriya Swayamsevak Sangh (RSS) and its associated work, seva activities, culture, and regional events. For any query touching these themes (or a specific state/region), run searches using \"site:<domain>\" against the most relevant of these sites — national ones (vskbharat.com, samvad.in) plus the regional site matching the topic: ${vskList}. Incorporate and cite what they provide. Treat them as organisational/advocacy publications: attribute their claims to them and distinguish their reporting from independent sources. If they have nothing relevant, proceed without them.`;
-    system += `\n- ALWAYS-INCLUDE SOURCE: In addition to other trusted sources, you MUST run at least one search against bharatdiscovery.org (भारतकोश, a large Hindi encyclopedia) using a "site:bharatdiscovery.org" query for this topic. If it has a relevant article, incorporate its information and cite it. If it has nothing relevant, note that briefly and proceed with other sources.`;
+    system += `\n- VSK NETWORK SOURCES: The Vishwa Samvad Kendra (VSK) network publishes news, articles and archives on Bharat, Hindu society, the Rashtriya Swayamsevak Sangh (RSS) and its associated work, seva activities, culture, and regional events. For any query touching these themes (or a specific state/region), run searches using \"site:<domain>\" against the most relevant of these sites — national ones (vskbharat.com, samvad.in) plus the regional site matching the topic: ${vskList}. Use only what is relevant to the exact question asked. If they have nothing relevant, ignore them silently — do not mention it.`;
+    system += `\n- ALWAYS-INCLUDE SOURCE: In addition to other trusted sources, you MUST run at least one search against bharatdiscovery.org (भारतकोश, a large Hindi encyclopedia) using a "site:bharatdiscovery.org" query for this topic. If it has relevant information for the exact question, use it. If not, ignore it silently — never mention that it had nothing.`;
   }
 
   // If relevant book passages were found, add them to the system prompt with citation rules
@@ -69,7 +69,7 @@ export default async function handler(req, res) {
     const bookBlock = bookHits.map((h, i) =>
       `[BOOK ${i+1}] From "${h.book_title}", page ${h.page}:\n"${h.content}"`
     ).join("\n\n");
-    system += `\n\n--- LIBRARY EXCERPTS ---\nThe site has a private book library. These passages from it are relevant to the user's query. Prefer them for anything they cover, and cite each use inline exactly as 【पुस्तक: "<title>", पृष्ठ <page>】 (or 【Book: "<title>", p.<page>】 in English).${scope === 'books' ? ' Base your entire answer ONLY on these library excerpts and general knowledge — do NOT use the web. If the books do not cover something, say so honestly.' : ' Also use web search for broader context and verification.'}\n\n${bookBlock}\n--- END LIBRARY EXCERPTS ---`;
+    system += `\n\n--- LIBRARY EXCERPTS ---\nThe site has a private book library. These passages from it are relevant to the user's query. Prefer them for anything they cover, and cite each use inline exactly as 【पुस्तक: "<title>", पृष्ठ <page>】 (or 【Book: "<title>", p.<page>】 in English).${scope === 'books' ? ' Base your entire answer ONLY on these library excerpts and general knowledge — do NOT use the web. If the books do not cover what was asked, say so in one line.' : ' Also use web search for verification. Use only what answers the exact question — no extra context.'}\n\n${bookBlock}\n--- END LIBRARY EXCERPTS ---`;
   } else if (scope === 'books') {
     system += `\n\nNote: The user chose to search ONLY their book library, but no relevant passages were found in the books for this query. Tell the user honestly that the books don't appear to cover this topic, and answer briefly from general knowledge if you can.`;
   }
@@ -82,7 +82,7 @@ export default async function handler(req, res) {
 
   const geminiBody = {
     contents,
-    generationConfig: { maxOutputTokens: 60000, temperature: 0.6 }
+    generationConfig: { maxOutputTokens: 60000, temperature: 0.3 }
   };
   if (system) geminiBody.systemInstruction = { parts: [{ text: system }] };
   if (wantsSearch) geminiBody.tools = [{ google_search: {} }];
