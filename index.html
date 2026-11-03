@@ -404,7 +404,7 @@ h1.hero em{font-style:italic;color:var(--accent)}
 <main id="homeView">
   <span class="eyebrow" id="eyebrow">Research anything</span>
   <h1 class="hero" id="heroTitle">Every question deserves<br>a <em>proper answer</em>.</h1>
-  <p class="hero-sub" id="heroSub">Ask in plain language. Vishwa Samwad Kendra searches trusted sources, cross-checks what it finds, separates fact from opinion, and writes you a structured research report — with references.</p>
+  <p class="hero-sub" id="heroSub">Ask in plain language. Vishwa Samwad Kendra searches trusted sources, cross-checks what it finds, and gives you exactly the information you asked for — with references.</p>
 
   <div class="console" id="homeConsole">
     <div class="meridian"></div>
@@ -512,7 +512,7 @@ const I18N = {
   en: {
     eyebrow: 'Research anything',
     hero: 'Every question deserves<br>a <em>proper answer</em>.',
-    sub: 'Ask in plain language. Vishwa Samwad Kendra searches trusted sources, cross-checks what it finds, separates fact from opinion, and writes you a structured research report — with references.',
+    sub: 'Ask in plain language. Vishwa Samwad Kendra searches trusted sources, cross-checks what it finds, and gives you exactly the information you asked for — with references.',
     ph: "Search anything…\nResearch any topic, person, company, country, historical event, science, technology, politics, economics, health, business, law, sports, entertainment and more.",
     fuPh: 'Ask a follow-up, compare, or go deeper…',
     research: 'Research', ask: 'Ask', busyBtn: 'Researching…',
@@ -530,12 +530,12 @@ const I18N = {
     startBtn: n => `Research ${n} selected →`,
     writing: s => `✍️ Writing part ${s} of the report… (long reports are written in parts automatically)`,
     limitNote: 'This report used its full auto-writing budget. Ask a follow-up like "continue" and it will keep going.',
-    trace: ["Understanding the question","Searching trusted sources","Cross-checking information","Removing duplicates & detecting conflicts","Separating facts from opinions","Composing the research report"],
+    trace: ["Understanding the question","Searching trusted sources","Cross-checking information","Removing duplicates & detecting conflicts","Separating facts from opinions","Writing the answer"],
   },
   hi: {
     eyebrow: 'किसी भी विषय पर शोध करें',
     hero: 'हर प्रश्न को चाहिए<br>एक <em>सटीक उत्तर</em>।',
-    sub: 'सरल भाषा में पूछिए। विश्व संवाद केंद्र विश्वसनीय स्रोत खोजता है, जानकारी की जाँच करता है, तथ्य और राय को अलग करता है, और संदर्भों के साथ एक संरचित शोध रिपोर्ट लिखता है।',
+    sub: 'सरल भाषा में पूछिए। विश्व संवाद केंद्र विश्वसनीय स्रोत खोजता है, जानकारी की जाँच करता है, और संदर्भों के साथ आपको केवल वही जानकारी देता है जो आपने पूछी है।',
     ph: "कुछ भी खोजें…\nकोई भी विषय, व्यक्ति, कंपनी, देश, ऐतिहासिक घटना, विज्ञान, तकनीक, राजनीति, अर्थव्यवस्था, स्वास्थ्य, व्यापार, कानून, खेल आदि पर शोध करें।",
     fuPh: 'आगे का प्रश्न पूछें, तुलना करें, या और गहराई में जाएँ…',
     research: 'शोध करें', ask: 'पूछें', busyBtn: 'शोध जारी…',
@@ -553,7 +553,7 @@ const I18N = {
     startBtn: n => `चुने गए ${n} स्रोतों से शोध करें →`,
     writing: s => `✍️ रिपोर्ट का भाग ${s} लिखा जा रहा है… (लंबी रिपोर्ट स्वतः भागों में लिखी जाती है)`,
     limitNote: 'इस रिपोर्ट ने अपनी पूरी लेखन-सीमा उपयोग कर ली। "आगे लिखो" जैसा प्रश्न पूछें और यह आगे लिखेगा।',
-    trace: ["प्रश्न को समझा जा रहा है","विश्वसनीय स्रोत खोजे जा रहे हैं","जानकारी की जाँच हो रही है","दोहराव हटाना और विरोधाभास पहचानना","तथ्य और राय अलग किए जा रहे हैं","शोध रिपोर्ट लिखी जा रही है"],
+    trace: ["प्रश्न को समझा जा रहा है","विश्वसनीय स्रोत खोजे जा रहे हैं","जानकारी की जाँच हो रही है","दोहराव हटाना और विरोधाभास पहचानना","तथ्य और राय अलग किए जा रहे हैं","उत्तर लिखा जा रहा है"],
   }
 };
 const t = () => I18N[state.lang];
@@ -1033,28 +1033,32 @@ function startFollowUp(){
 
 function systemPrompt(mode){
   const depth = {
-    brief: "MODE: BRIEF. Produce a tight ~200–300 word briefing: a 2-sentence Executive Summary, 4–6 Key Findings as bullets, and a one-line Bottom Line. Nothing else.",
-    standard: "MODE: STANDARD. Produce a well-structured, substantive report (~800–1200 words) with the most relevant of these sections: Executive Summary, Key Findings, Background, Detailed Analysis, Different Perspectives, Risks or Limitations, Future Outlook, Conclusion. The interface writes long reports in parts: if you are cut off, you will be asked to continue, so write the full report naturally and never compress it to fit — depth over brevity.",
-    deep: "MODE: DEEP RESEARCH. You are writing the FIRST part of a long, exhaustive report that continues in several follow-up parts. In THIS part write a substantial, detailed opening: a rich Executive Summary (a full paragraph), then a thorough Key Findings section (6-10 detailed bullets), then begin a Background/Overview. Write in depth with specifics — names, dates, numbers, mechanisms. Do NOT try to cover everything now and do NOT write a Conclusion yet; later parts add Analysis, Timeline, Statistics, Perspectives, Risks, FAQ, and Conclusion. Never compress to save space."
+    brief: "LENGTH: BRIEF. Give the shortest complete answer — a few lines or a short list. Just the facts asked for.",
+    standard: "LENGTH: STANDARD. Answer fully but only what was asked — include the details the question needs (names, dates, numbers, lists), nothing extra.",
+    deep: "LENGTH: DETAILED. Give a thorough, detailed answer to exactly what was asked — every relevant specific (names, dates, numbers, events, quotes) about the asked subject. Go deep on the question itself; do NOT widen it into background, analysis, perspectives, risks, outlook or other side topics."
   }[mode];
   const langRule = state.lang === 'hi'
-    ? '\n- LANGUAGE: Write the ENTIRE report in Hindi (हिंदी, Devanagari script) — every heading, table, and sentence. Keep proper nouns, brand names, and unavoidable technical terms in English where natural (e.g. "GDP", "SpaceX").'
+    ? '\n- LANGUAGE: Write the ENTIRE answer in Hindi (हिंदी, Devanagari script) — every heading, table, and sentence. Keep proper nouns, brand names, and unavoidable technical terms in English where natural (e.g. "GDP", "SpaceX").'
     : '';
   const srcRule = (state.current && state.current.domains && state.current.domains.length)
     ? `\n- SOURCE RESTRICTION: The user chose specific sources for this research: ${state.current.domains.join(', ')}. Your web searches are limited to these domains. Base the report on what they provide, cite them, and if they cannot answer part of the question, say so explicitly rather than inventing information.`
     : '';
-  return `You are Vishwa Samwad Kendra, a universal AI research engine. Research the user's query and write a structured research report.
+  return `You are Vishwa Samwad Kendra, an AI research assistant. Find the information the user asked for and give ONLY that information.
 
-Rules:
-- Use web search when the topic involves current events, recent data, specific companies/products/people, statistics, or anything that benefits from verification. Skip search only for timeless conceptual questions you can answer authoritatively.
-- Cross-check information across sources; if sources conflict, say so explicitly and present both sides.
-- Clearly distinguish established facts from opinions, estimates, and disputed claims (e.g. "Fact:", "Analysts' view:", "Disputed:").
-- Prioritize primary and official sources (government sites, filings, papers, official docs) over aggregators. For India-related topics, prioritize authoritative Indian sources: PIB, RBI, ministry websites, MoSPI, NITI Aayog, SEBI, data.gov.in, ISRO, PRS Legislative Research, and reputable Indian outlets (The Hindu, Indian Express, Economic Times, Mint, Business Standard). Also consult bharatdiscovery.org (भारतकोश), a large Hindi encyclopedia, especially for Hindi-language research and Indian history, culture, biographies, and general knowledge.
-- Write in clean Markdown: ## section headings, bullet lists, tables where they genuinely help. No top-level # title — start directly with the first section.
-- Do NOT write a References section; sources are displayed separately by the interface.
-- Neutral, precise, professional tone. No filler.
+Most important rule — ANSWER ONLY WHAT IS ASKED:
+- Answer the exact question directly, starting from the first line. No introduction, no restating the question.
+- Do NOT write a research report. Do NOT add sections such as Executive Summary, Key Findings, Background, Detailed Analysis, Different Perspectives, Advantages/Disadvantages, Risks or Limitations, Future Outlook, FAQ, or Conclusion (or their Hindi equivalents like प्रमुख निष्कर्ष, विस्तृत विश्लेषण, विभिन्न दृष्टिकोण, भविष्य की दृष्टि, निष्कर्ष) — unless the user explicitly asks for them.
+- Do NOT add background, context, related topics, opinions, or commentary the user did not ask for. If the user asks for a list, give the list; if they ask for a date, give the date; if they ask about a person, give what they asked about that person.
+- Use headings only if the user asked for several distinct things; otherwise use plain paragraphs or bullet points.
+- No summary or concluding paragraph at the end.
+
+Accuracy:
+- Use web search for current events, recent data, specific people/organisations, statistics, or anything that benefits from verification.
+- Prioritize primary and official sources. For India-related topics prefer authoritative Indian sources (PIB, ministry websites, PRS, reputable Indian outlets) and bharatdiscovery.org (भारतकोश) for Indian history, culture and biographies.
+- If sources conflict on a fact the user asked about, mention it in one line. If the information cannot be found, say so plainly instead of guessing.
+- Clean Markdown. No top-level # title. No References section (sources are shown separately). Do not mention which websites you searched or that a site had nothing.
 - ${depth}
-- If this is a follow-up, build on the prior conversation rather than repeating it.${langRule}${srcRule}`;
+- If this is a follow-up, answer only the follow-up question; don't repeat earlier answers.${langRule}${srcRule}`;
 }
 
 async function runResearch(query){
@@ -1182,39 +1186,21 @@ async function runResearch(query){
     let r = await callAPI([...state.convo, { role: 'user', content: query }]);
     md = r.text; stopReason = r.stopReason;
 
-    // Section plan per mode. Deep research ACTIVELY writes many more sections
-    // (it doesn't wait to be truncated), so reports are genuinely long & detailed.
-    const PLAN = {
-      brief: [],
-      standard: [
-        'Continue the SAME report. Add these sections next, with ## headings, in depth, without repeating anything already written: Detailed Analysis, Different Perspectives, Risks or Limitations.',
-        'Continue the SAME report. Add these final sections with ## headings, without repeating anything: Future Outlook, Conclusion.'
-      ],
-      deep: [
-        'Continue the SAME research report. Do NOT repeat anything already written. Add these sections next, each with a ## heading and in thorough detail: Background & Context, Detailed Analysis (with specifics — names, dates, numbers, mechanisms).',
-        'Continue the SAME report without repeating. Add: Timeline of key events (as a list or table), and Statistics & Data (use a Markdown table where possible).',
-        'Continue the SAME report without repeating. Add: Different Perspectives / Debates, Advantages & Disadvantages, and Key Risks.',
-        'Continue the SAME report without repeating. Add: Notable Facts, Expert Opinions (label them as opinions), and a Frequently Asked Questions section (4-6 Q&As).',
-        'Continue the SAME report without repeating. Add the final sections: Future Outlook and a substantive Conclusion. Then stop.'
-      ]
-    }[state.mode];
-
-    const plan = PLAN || [];
-    for (let i = 0; i < plan.length; i++) {
+    // No forced extra report sections any more. Only if the answer was actually
+    // cut off mid-way do we ask for the rest of THE SAME answer (max 2 times).
+    for (let i = 0; i < 2 && stopReason === 'max_tokens'; i++) {
       showProgress(i + 2);
       const contMessages = [
         ...state.convo,
         { role: 'user', content: query },
         { role: 'assistant', content: md },
-        { role: 'user', content: plan[i] + ' Continue directly with the new section heading — no preamble, no "here is the continuation", and do not rewrite earlier sections.' }
+        { role: 'user', content: 'Your answer was cut off. Continue exactly where you stopped — no preamble, no repetition, no new sections or conclusion.' }
       ];
       try {
         const rr = await callAPI(contMessages);
-        if (rr.text && rr.text.trim()) {
-          md += '\n\n' + rr.text.trim();
-        }
+        if (rr.text && rr.text.trim()) md += '\n\n' + rr.text.trim();
+        stopReason = rr.stopReason;
       } catch (contErr) {
-        // if one continuation fails (e.g. quota), keep what we have and stop expanding
         break;
       }
     }
