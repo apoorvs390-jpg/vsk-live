@@ -532,7 +532,8 @@ h1.hero em{font-style:italic;color:var(--accent)}
       init.headers = h;
     }
     const resp = await origFetch(input, init);
-    if (isApi && resp.status === 401) { set(TK, null); showLogin('Session expired — please enter the password again. / कृपया पासवर्ड दोबारा डालें।'); }
+    // only interrupt if the tool was unlocked; ignore 401s while the lock/setup screen is already showing
+    if (isApi && resp.status === 401 && screen.classList.contains('hidden')) { set(TK, null); showLogin('Session expired — please enter the password again. / कृपया पासवर्ड दोबारा डालें।'); }
     return resp;
   };
 
@@ -565,6 +566,7 @@ h1.hero em{font-style:italic;color:var(--accent)}
 
   function unlock(isAdmin){
     screen.classList.add('hidden'); screen.classList.remove('overlay');
+    try { if (typeof loadLibrary === 'function') loadLibrary(); } catch(e){}
     const hdr = document.querySelector('.hdr-actions');
     if (hdr && !document.getElementById('lockBtn')) {
       const lb = document.createElement('button');
