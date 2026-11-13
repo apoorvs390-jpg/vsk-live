@@ -84,3 +84,19 @@ export async function sbDelete(path) {
   if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.message || "supabase delete failed"); }
   return true;
 }
+
+export async function sbUpdate(path, patch) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    method: "PATCH",
+    headers: {
+      "content-type": "application/json",
+      "apikey": SUPABASE_KEY,
+      "authorization": `Bearer ${SUPABASE_KEY}`,
+      "prefer": "return=representation"
+    },
+    body: JSON.stringify(patch)
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((data && data.message) || "supabase update failed");
+  return data;
+}

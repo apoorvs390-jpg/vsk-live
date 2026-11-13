@@ -2,6 +2,7 @@
 // The browser extracts PDF text (page by page) and posts it here in batches.
 // This function chunks + embeds each page and stores it in Supabase.
 
+import { requireAuth } from "./_auth.js";
 import { embed, sbInsert, sbSelect, sbDelete } from "./_lib.js";
 
 export const config = { maxDuration: 60 };
@@ -25,6 +26,7 @@ function chunkText(text, size = 800) {
 }
 
 export default async function handler(req, res) {
+  if (!(await requireAuth(req, res))) return;
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
     return res.status(200).json({ error: "Server missing SUPABASE_URL / SUPABASE_SERVICE_KEY. Add them in Vercel env vars." });
   }

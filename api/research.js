@@ -3,6 +3,7 @@
 // Now also searches a Supabase book library (semantic search) on every query,
 // so answers draw from your uploaded 100+ books AND the live web.
 
+import { requireAuth } from "./_auth.js";
 import { embed, sbRpc } from "./_lib.js";
 import { VSK_NETWORK } from "./_sources.js";
 
@@ -24,6 +25,7 @@ async function searchBooks(query) {
 }
 
 export default async function handler(req, res) {
+  if (!(await requireAuth(req, res))) return;
   if (req.method !== "POST") {
     return res.status(405).json({ error: { message: "Method not allowed" } });
   }
