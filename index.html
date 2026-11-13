@@ -503,6 +503,11 @@ h1.hero em{font-style:italic;color:var(--accent)}
 .lock-card label{display:block;font-size:12.5px;color:var(--ink-soft);margin:12px 0 5px}
 .lock-card input{width:100%;padding:11px 13px;border-radius:10px;border:1px solid var(--hairline);background:var(--bg);color:var(--ink);font-size:15px}
 .lock-card input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.lk-pw{position:relative}
+.lk-pw input{padding-right:46px}
+.lk-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:34px;height:34px;border:none;background:none;border-radius:8px;font-size:17px;line-height:1;color:var(--muted)}
+.lk-eye:hover{background:var(--accent-soft)}
+.lk-eye:focus-visible{outline:2px solid var(--accent)}
 .lock-card .lk-btn{width:100%;margin-top:18px;padding:12px;border:none;border-radius:10px;background:var(--accent);color:var(--accent-ink);font-size:15px;font-weight:600}
 .lock-card .lk-btn:disabled{opacity:.6;cursor:wait}
 .lock-card .lk-link{display:block;margin:12px auto 0;background:none;border:none;color:var(--muted);font-size:13px;text-decoration:underline}
@@ -546,13 +551,22 @@ h1.hero em{font-style:italic;color:var(--accent)}
     screen.classList.remove('hidden');
     card.innerHTML = `<h2>${title}</h2><p class="sub">${sub}</p>
       <form id="lkForm" autocomplete="off">
-        ${fields.map(f => `<label for="${f.id}">${f.label}</label><input type="password" id="${f.id}" ${f.auto ? `autocomplete="${f.auto}"` : ''} required>`).join('')}
+        ${fields.map(f => `<label for="${f.id}">${f.label}</label><div class="lk-pw"><input type="password" id="${f.id}" ${f.auto ? `autocomplete="${f.auto}"` : ''} required><button type="button" class="lk-eye" data-for="${f.id}" title="Show password / पासवर्ड दिखाएँ" aria-label="Show password">👁</button></div>`).join('')}
         <button class="lk-btn" type="submit">${btn}</button>
         <div class="lk-msg" id="lkMsg"></div>
         ${extra || ''}
       </form>`;
     const f = document.getElementById('lkForm');
     const first = f.querySelector('input'); if (first) first.focus();
+    f.querySelectorAll('.lk-eye').forEach(btn => btn.onclick = () => {
+      const inp = document.getElementById(btn.dataset.for);
+      const show = inp.type === 'password';
+      inp.type = show ? 'text' : 'password';
+      btn.textContent = show ? '🙈' : '👁';
+      btn.title = show ? 'Hide password / पासवर्ड छिपाएँ' : 'Show password / पासवर्ड दिखाएँ';
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      inp.focus();
+    });
     f.onsubmit = async e => {
       e.preventDefault();
       const vals = {}; fields.forEach(x => vals[x.id] = document.getElementById(x.id).value);
