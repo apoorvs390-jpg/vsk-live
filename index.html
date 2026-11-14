@@ -651,7 +651,11 @@ h1.hero em{font-style:italic;color:var(--accent)}
   (async function init(){
     try {
       const s = await auth({ action:'status', token: get(TK) || '', adminToken: get(AK) || '' });
-      if (s.error) { card.innerHTML = `<h2>Setup needed</h2><p class="sub">${esc(s.error)}</p>`; return; }
+      if (s.error) {
+        card.innerHTML = `<h2>Can't open right now / अभी नहीं खुल रहा</h2><p class="sub">${esc(s.error)}</p><button class="lk-btn" id="lkRetry">Retry / दोबारा कोशिश करें</button>`;
+        document.getElementById('lkRetry').onclick = () => { card.innerHTML = '<p class="sub">Checking… / जाँच हो रही है…</p>'; init(); };
+        return;
+      }
       if (!s.configured) return showSetup();
       if (s.loggedIn) return unlock(s.isAdmin);
       showLogin();
